@@ -1,7 +1,7 @@
-from typing import Any
+from typing import Any, Annotated
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-secret-key"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
-    cors_origins: list[str] = []
+    cors_origins: Annotated[list[str], NoDecode] = []
 
     @field_validator("cors_origins", mode="before")
     @classmethod
