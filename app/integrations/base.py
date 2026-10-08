@@ -100,6 +100,14 @@ class SocialPlatform(ABC):
         await self.client.aclose()
 
     async def _request(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+        params = kwargs.get("params")
+        if isinstance(params, dict) and "access_token" in params:
+            params = dict(params)
+            access_token = params.pop("access_token")
+            kwargs["params"] = params
+            headers = dict(kwargs.get("headers") or {})
+            headers["Authorization"] = f"Bearer {access_token}"
+            kwargs["headers"] = headers
         response = await self.client.request(method, url, **kwargs)
         if response.status_code == 429:
             raise RateLimitError(f"{self.platform.value} rate limit reached")

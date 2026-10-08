@@ -1,4 +1,5 @@
 from datetime import datetime
+from calendar import monthrange
 from datetime import date
 from typing import Any
 
@@ -49,15 +50,27 @@ class YouTubeIntegration(SocialPlatform):
         return VideoPage(items, search.get("nextPageToken"))
 
     async def get_analytics(self, access_token: str, start_date: date, end_date: date) -> dict[str, Any]:
+        if type(start_date) is not date or type(end_date) is not date:
+            raise TypeError("YouTube analytics dates must be date instances")
+        if start_date > end_date:
+            raise ValueError("YouTube analytics start date must be before or equal to end date")
+        monthly_start = start_date.replace(day=1)
+        monthly_end = end_date.replace(day=monthrange(end_date.year, end_date.month)[1])
         common = {
             "ids": "channel==MINE",
             "startDate": start_date.isoformat(),
             "endDate": end_date.isoformat(),
             "access_token": access_token,
         }
+        monthly_range = {
+            "ids": "channel==MINE",
+            "startDate": monthly_start.isoformat(),
+            "endDate": monthly_end.isoformat(),
+            "access_token": access_token,
+        }
         summary = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost")
         daily = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost", "day")
-        monthly = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,subscribersGained,subscribersLost", "month")
+        monthly = await self._report(access_token, monthly_range, "views,likes,comments,shares,estimatedMinutesWatched,subscribersGained,subscribersLost", "month")
         traffic_sources = await self._report(access_token, common, "views,estimatedMinutesWatched", "insightTrafficSourceType")
         geography = await self._report(access_token, common, "views,estimatedMinutesWatched", "country")
         playback_location = await self._report(access_token, common, "views,estimatedMinutesWatched", "insightPlaybackLocationType")

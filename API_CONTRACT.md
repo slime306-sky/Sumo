@@ -690,6 +690,8 @@ Returns analytics for an account owned by the current user.
 
 Returns YouTube Analytics API data for an owned YouTube account. `start_date` and
 `end_date` are optional ISO dates and default to the previous 28 days.
+Dates must be between `2005-02-14` and today, and `start_date` must not be after
+`end_date`.
 
 The response contains `summary`, `daily`, `monthly`, `traffic_sources`,
 `geography`, `playback_location`, and `age_gender` arrays. The summary and
