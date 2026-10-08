@@ -30,8 +30,8 @@ async def rate_limit_handler(_, __) -> JSONResponse:
 
 
 @app.exception_handler(SocialIntegrationError)
-async def integration_error_handler(_, __) -> JSONResponse:
-    return JSONResponse(status_code=502, content={"detail": "Social platform request failed"})
+async def integration_error_handler(_, exc: SocialIntegrationError) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.exception_handler(PlatformTemporarilyDisabledError)
