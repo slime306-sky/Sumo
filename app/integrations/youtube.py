@@ -1,5 +1,4 @@
 from datetime import datetime
-from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
 
@@ -55,11 +54,7 @@ class YouTubeIntegration(SocialPlatform):
         if start_date > end_date:
             raise ValueError("YouTube analytics start date must be before or equal to end date")
         monthly_start = start_date.replace(day=1)
-        monthly_end = end_date.replace(day=monthrange(end_date.year, end_date.month)[1])
-        latest_available_date = date.today() - timedelta(days=1)
-        if monthly_end > latest_available_date:
-            monthly_end = end_date.replace(day=1) - timedelta(days=1)
-            monthly_start = monthly_end.replace(day=1)
+        monthly_end = end_date.replace(day=1)
         common = {
             "ids": "channel==MINE",
             "startDate": start_date.isoformat(),

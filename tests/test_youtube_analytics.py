@@ -63,7 +63,7 @@ async def test_youtube_monthly_analytics_uses_month_boundaries():
     monthly_params = client.requests[2][2]["params"]
     assert monthly_params["dimensions"] == "month"
     assert monthly_params["startDate"] == "2026-09-01"
-    assert monthly_params["endDate"] == "2026-09-30"
+    assert monthly_params["endDate"] == "2026-10-01"
 
 
 def test_youtube_date_range_rejects_reversed_dates():

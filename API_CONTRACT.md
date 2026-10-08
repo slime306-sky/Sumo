@@ -698,8 +698,9 @@ The response contains `summary`, `daily`, `monthly`, `traffic_sources`,
 `geography`, `playback_location`, and `age_gender` arrays. The summary and
 time-series rows include views, likes, comments, shares, watch time, average
 view duration, average view percentage, and subscribers gained/lost where
-provided by YouTube. Monthly queries use completed calendar-month boundaries
-separately from the requested overall/daily range.
+provided by YouTube. Monthly queries use the first day of each calendar month
+for both `startDate` and `endDate`, separately from the requested overall/daily
+range, as required by the YouTube Analytics `month` dimension.
 
 The first YouTube connection must be reconnected after enabling this feature so
 the OAuth token includes the `yt-analytics.readonly` scope.
