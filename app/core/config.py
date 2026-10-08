@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "Sumo Social API"
     app_env: str = "development"
     secret_key: str = Field(default="change-me", min_length=1)
+    access_token_expire_minutes: int = Field(default=60, ge=1)
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/sumo"
     oauth_success_redirect: str = "http://localhost:3000/settings/social"
     request_timeout_seconds: float = 20.0

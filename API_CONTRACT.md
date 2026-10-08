@@ -8,8 +8,16 @@ This document describes the API implemented by the current FastAPI backend. Path
 - Content type for JSON requests: `application/json`
 - Datetimes use ISO 8601. Scheduled content must include a timezone and be in the future.
 - Supported social platforms: `facebook`, `youtube`. Other platform names fail request validation with `422`.
-- Most creator/brand-owned endpoints use the `X-User-ID` header. It defaults to `1` for this MVP; it is not authentication and must be replaced before production.
-- Public discovery routes do not require `X-User-ID`.
+- Most creator/brand-owned endpoints require `Authorization: Bearer <access_token>`.
+- Public discovery routes do not require authentication.
+
+### Authentication
+
+`POST /auth/register` accepts `{ "login_id": "creator_1", "password": "a-strong-password", "role": "creator" }`.
+The role must be `creator` or `brand`. `POST /auth/login` accepts `login_id` and `password`.
+Both endpoints return `user_id`, `role`, `access_token`, and `token_type: "bearer"`.
+Send the access token as `Authorization: Bearer <access_token>` to protected endpoints.
+Tokens are signed with `SECRET_KEY` and expire after `ACCESS_TOKEN_EXPIRE_MINUTES`.
 - Tokens are never included in social-account or creator-profile responses.
 
 ### Common errors
@@ -52,7 +60,7 @@ No headers or body required.
 
 ### `GET /social/{platform}/connect`
 
-Begins OAuth for the specified supported platform. Supply the creator's `X-User-ID` so the callback associates the account with the correct owner.
+Begins OAuth for the specified supported platform. Authenticate the request with the creator.s bearer token so the callback state associates the account with the correct owner.
 
 **Path parameter**
 
@@ -64,7 +72,7 @@ Begins OAuth for the specified supported platform. Supply the creator's `X-User-
 
 | Name | Required | Description |
 |---|---|---|
-| `X-User-ID` | No | Account owner; defaults to `1` |
+| `Authorization: Bearer <access_token>` | Yes | Bearer access token identifying the account owner |
 
 **200 response**
 
@@ -76,7 +84,7 @@ Begins OAuth for the specified supported platform. Supply the creator's `X-User-
 
 ### `GET /social/{platform}/callback`
 
-OAuth redirect target. The provider supplies `code`; the API uses the signed `state` to recover the owner ID. `X-User-ID` is optional and, if supplied, must match the state.
+OAuth redirect target. The provider supplies `code`; the API uses the signed `state` to recover the owner ID. `Authorization: Bearer <access_token>` is optional and, if supplied, must match the state.
 
 **Query parameters**
 
@@ -110,7 +118,7 @@ OAuth redirect target. The provider supplies `code`; the API uses the signed `st
 
 Lists the current user's active accounts on enabled platforms.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `SocialAccountResponse` objects, as above.
 
@@ -118,7 +126,7 @@ Lists the current user's active accounts on enabled platforms.
 
 Sets whether a connected account is marked as an influencer account. This is an idempotent set operation.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -134,7 +142,7 @@ Sets whether a connected account is marked as an influencer account. This is an 
 
 Returns videos already stored for an owned active account. It does not trigger a provider sync.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response**
 
@@ -165,7 +173,7 @@ Returns videos already stored for an owned active account. It does not trigger a
 
 Fetches and persists provider videos for an owned active account.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 No request body.
 
@@ -219,7 +227,7 @@ Each `social_accounts` entry contains `platform`, `platform_username`, `profile_
 
 Creates or updates the current user's creator profile (upsert behavior).
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -241,7 +249,7 @@ Only `display_name` is required; omitted optional fields use the defaults shown 
 
 Returns the current user's creator profile and connected social accounts.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** `CreatorProfileResponse`.
 
@@ -251,7 +259,7 @@ Returns the current user's creator profile and connected social accounts.
 
 Updates an existing creator profile. All fields are optional; supplied fields are updated.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body example**
 
@@ -287,7 +295,7 @@ Returns one public creator profile by owner ID.
 
 Creates or updates the current user's brand profile (upsert behavior).
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -309,7 +317,7 @@ Creates or updates the current user's brand profile (upsert behavior).
 
 Returns the current user's brand profile.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** `BrandProfileResponse`.
 
@@ -319,7 +327,7 @@ Returns the current user's brand profile.
 
 Updates an existing brand profile; fields are optional.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body example**
 
@@ -341,7 +349,7 @@ Updates an existing brand profile; fields are optional.
 
 Creates a campaign. The current user must have a brand profile.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -366,7 +374,7 @@ Only `title` is required. `ends_at` cannot precede `starts_at`.
 
 Lists campaigns owned by the current brand.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `CampaignResponse` objects.
 
@@ -374,7 +382,7 @@ Lists campaigns owned by the current brand.
 
 Updates an owned campaign. All request fields are optional.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body example**
 
@@ -396,7 +404,7 @@ Lists campaigns whose status is `open`; this route is public.
 
 Sends an invitation to a public creator, optionally tied to a campaign owned by the brand.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -430,7 +438,7 @@ Sends an invitation to a public creator, optionally tied to a campaign owned by 
 
 Lists requests sent by the current brand.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `CollaborationResponse` objects.
 
@@ -438,7 +446,7 @@ Lists requests sent by the current brand.
 
 Lists requests received by the current creator.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `CollaborationResponse` objects.
 
@@ -446,7 +454,7 @@ Lists requests received by the current creator.
 
 Accepts or declines a pending collaboration request.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -464,7 +472,7 @@ Allowed values: `accepted`, `declined`.
 
 Updates progress on an accepted request.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -490,7 +498,7 @@ Content status is `draft`, `scheduled`, or `published` in current service workfl
 
 Creates a content draft or a scheduled item. At least one of `caption` or `media_url` must be non-empty. Every target account must belong to the current user and be active/enabled.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -535,7 +543,7 @@ All properties are optional except that at least one of `caption` or `media_url`
 
 Lists the current user's content. Optional query parameter: `status` (string; commonly `draft`, `scheduled`, or `published`).
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `ContentResponse` objects.
 
@@ -543,7 +551,7 @@ Lists the current user's content. Optional query parameter: `status` (string; co
 
 Lists scheduled items whose `scheduled_at` falls within the given inclusive range. Both parameters are required; `end` must be after `start`.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `ContentResponse` objects.
 
@@ -553,7 +561,7 @@ Lists scheduled items whose `scheduled_at` falls within the given inclusive rang
 
 Lists the current user's items with `status: "published"`.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `ContentResponse` objects. The current provider integrations do not publish content, so no item is marked published by the publish endpoint yet.
 
@@ -561,7 +569,7 @@ Lists the current user's items with `status: "published"`.
 
 Returns one content item owned by the current user.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** `ContentResponse`.
 
@@ -571,7 +579,7 @@ Returns one content item owned by the current user.
 
 Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `social_account_ids`, `scheduled_at`. Fields are optional. At least one of caption/media URL must remain set. `scheduled_at: null` clears the schedule; a non-null value must be a future timezone-aware datetime with at least one target account. Replacing targets requires all account IDs to belong to the current user.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body example**
 
@@ -591,7 +599,7 @@ Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `s
 
 No request body. Returns `501 Not Implemented` for an owned content item because the current Facebook and YouTube integrations lack configured publishing permissions and upload implementations.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Errors:** `404` content not found/owned; `501` publishing is not currently available.
 
@@ -613,7 +621,7 @@ Account analytics contains:
 
 Returns aggregates for all active accounts belonging to the current user.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response**
 
@@ -641,7 +649,7 @@ Returns aggregates for all active accounts belonging to the current user.
 
 ### `GET /analytics/creators/{creator_user_id}`
 
-Returns the same analytics overview for a public creator. Does not require `X-User-ID`.
+Returns the same analytics overview for a public creator. Does not require `Authorization: Bearer <access_token>`.
 
 **200 response:** analytics overview shape above.
 
@@ -651,7 +659,7 @@ Returns the same analytics overview for a public creator. Does not require `X-Us
 
 Returns analytics for an account owned by the current user.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** account analytics shape above.
 
@@ -661,7 +669,7 @@ Returns analytics for an account owned by the current user.
 
 Stores a metric observation for an account owned by the current user. At least one metric must be supplied; values must be non-negative integers.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **Request body**
 
@@ -689,7 +697,7 @@ Either field may be `null` or omitted, but not both.
 
 Lists recorded metric snapshots for an account owned by the current user, ordered by recording time.
 
-**Headers:** `X-User-ID` optional, defaults to `1`.
+**Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of metric snapshot objects as shown above.
 
@@ -700,4 +708,4 @@ Lists recorded metric snapshots for an account owned by the current user, ordere
 - There is no background worker that dispatches scheduled content; scheduling currently persists calendar entries only.
 - `POST /content/{content_id}/publish` intentionally returns `501` until Facebook and YouTube write scopes and upload implementations are added.
 - Follower snapshots are manually posted; platform integrations do not currently retrieve audience size.
-- `X-User-ID` is a development identity header, not an authentication mechanism.
+- Bearer access tokens identify authenticated users.

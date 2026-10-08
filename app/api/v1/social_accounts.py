@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
-from app.core.security import validate_oauth_state
+from app.core.security import current_user_id, validate_oauth_state
 from app.integrations.base import SocialIntegrationError
 from app.models.social_account import Platform
 from app.schemas.social_account import InfluencerUpdate, SocialAccountResponse, SyncResponse
@@ -22,10 +22,6 @@ def require_enabled_platform(platform: Platform, settings: Settings) -> None:
         raise HTTPException(status_code=404, detail="Platform temporarily disabled") from exc
 
 
-def current_user_id(x_user_id: int = Header(default=1, alias="X-User-ID")) -> int:
-    return x_user_id
-
-
 @router.get("/{platform}/connect")
 async def connect_platform(platform: Platform, user_id: int = Depends(current_user_id), settings: Settings = Depends(get_settings)) -> dict[str, str]:
     require_enabled_platform(platform, settings)
@@ -33,9 +29,9 @@ async def connect_platform(platform: Platform, user_id: int = Depends(current_us
 
 
 @router.get("/{platform}/callback", response_model=SocialAccountResponse)
-async def oauth_callback(platform: Platform, code: str = Query(...), state: str = Query(...), x_user_id: int | None = Header(default=None, alias="X-User-ID"), db: AsyncSession = Depends(get_db), settings: Settings = Depends(get_settings)) -> SocialAccountResponse:
+async def oauth_callback(platform: Platform, code: str = Query(...), state: str = Query(...), db: AsyncSession = Depends(get_db), settings: Settings = Depends(get_settings)) -> SocialAccountResponse:
     require_enabled_platform(platform, settings)
-    user_id = validate_oauth_state(state, platform.value, x_user_id)
+    user_id = validate_oauth_state(state, platform.value)
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
     try:
