@@ -1,15 +1,30 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.api.v1.social_accounts import current_user_id
-from app.schemas.creator_platform import ContentCreate, ContentResponse, ContentUpdate
+from app.integrations.base import SocialIntegrationError
+from app.schemas.creator_platform import ContentCreate, ContentResponse, ContentUpdate, VideoUploadResponse
 from app.services.creator_platform_service import CreatorPlatformService
+from app.services.media_upload_service import MediaUploadError, MediaUploadService
 
 router = APIRouter(prefix="/content", tags=["content management"])
+
+
+@router.post("/upload", response_model=VideoUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_video(
+    file: UploadFile = File(...),
+    user_id: int = Depends(current_user_id),
+) -> dict:
+    try:
+        return await MediaUploadService(get_settings()).upload_video(file, user_id)
+    except MediaUploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        await file.close()
 
 
 @router.post("", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
@@ -57,9 +72,11 @@ async def update_content(content_id: int, values: ContentUpdate, db: AsyncSessio
     return item
 
 
-@router.post("/{content_id}/publish", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-async def publish_content(content_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> None:
-    item = await CreatorPlatformService(db, get_settings()).get_content(user_id, content_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Content not found")
-    raise HTTPException(status_code=501, detail="Publishing requires Facebook and YouTube write permissions and provider upload integrations")
+@router.post("/{content_id}/publish", response_model=ContentResponse)
+async def publish_content(content_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> dict:
+    try:
+        return await CreatorPlatformService(db, get_settings()).publish_content(user_id, content_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, SocialIntegrationError) as exc:
+        raise HTTPException(status_code=502 if isinstance(exc, SocialIntegrationError) else 400, detail=str(exc)) from exc

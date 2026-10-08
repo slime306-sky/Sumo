@@ -108,6 +108,16 @@ class ContentResponse(BaseModel):
     targets: list[ContentTargetResponse]
 
 
+class VideoUploadResponse(BaseModel):
+    media_url: str
+    public_id: str
+    resource_type: str
+    format: str | None = None
+    bytes: int
+    duration: float | None = None
+    original_filename: str
+
+
 class CampaignCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None

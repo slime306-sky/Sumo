@@ -76,6 +76,37 @@ No headers or body required.
 {"status": "ok"}
 ```
 
+## Video uploads and publishing
+
+### `POST /content/upload`
+
+Uploads a video file to Cloudinary. Authenticate with the creator's bearer
+token and send a `multipart/form-data` request with the `file` field.
+
+```bash
+curl -X POST "{{API_BASE_URL}}/api/v1/content/upload" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@./video.mp4"
+```
+
+**201 response**
+
+```json
+{
+  "media_url": "https://res.cloudinary.com/example/video/upload/v1/sumo/videos/7/abc.mp4",
+  "public_id": "sumo/videos/7/abc",
+  "resource_type": "video",
+  "format": "mp4",
+  "bytes": 1048576,
+  "duration": 32.4,
+  "original_filename": "video.mp4"
+}
+```
+
+Use the returned `media_url` as `media_url` in `POST /content`, then call
+`POST /content/{content_id}/publish` to send the video to its selected
+YouTube and Facebook accounts. The default upload limit is 500 MB.
+
 ## Social accounts
 
 ### `GET /social/{platform}/connect`

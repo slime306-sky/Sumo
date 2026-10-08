@@ -4,6 +4,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.integrations.base import PlatformAPIError, SocialIntegrationError
+from app.integrations.registry import get_integration
 from app.models.creator_platform import AccountMetricSnapshot, BrandProfile, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
 from app.models.social_account import SocialAccount
 from app.models.social_video import SocialVideo
@@ -172,6 +174,57 @@ class CreatorPlatformService:
         await self.db.commit()
         await self.db.refresh(item)
         return await self._content_response(item)
+
+    async def publish_content(self, user_id: int, content_id: int) -> dict:
+        item = await self.get_content(user_id, content_id)
+        if item is None:
+            raise LookupError("Content not found")
+        if not item.media_url:
+            raise ValueError("Content must have a media URL before publishing")
+        if item.status == "published":
+            raise ValueError("Published content cannot be published again")
+        result = await self.db.execute(
+            select(ContentTarget, SocialAccount)
+            .join(SocialAccount, SocialAccount.id == ContentTarget.social_account_id)
+            .where(ContentTarget.content_item_id == item.id, SocialAccount.user_id == user_id, SocialAccount.is_active.is_(True))
+            .order_by(ContentTarget.id)
+        )
+        targets = list(result.all())
+        if not targets:
+            raise ValueError("Content must target at least one social account")
+
+        item.status = "publishing"
+        await self.db.commit()
+        failures: list[str] = []
+        title = (item.caption or "Untitled video")[:100]
+        for target, account in targets:
+            target.status = "publishing"
+            await self.db.commit()
+            try:
+                token = await self._valid_token(account)
+                published = await get_integration(account.platform, self.settings).publish_video(token, item.media_url, title, item.caption)
+            except SocialIntegrationError as exc:
+                target.status = "failed"
+                failures.append(f"{account.platform.value}: {exc}")
+            else:
+                target.status = "published"
+                target.platform_post_id = published.platform_video_id
+                target.published_url = published.url
+            await self.db.commit()
+
+        if failures:
+            item.status = "failed"
+            await self.db.commit()
+            raise PlatformAPIError("Publishing failed: " + "; ".join(failures))
+        item.status = "published"
+        item.published_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        return await self._content_response(item)
+
+    async def _valid_token(self, account: SocialAccount) -> str:
+        from app.services.social_account_service import SocialAccountService
+
+        return await SocialAccountService(self.db, self.settings).valid_token(account)
 
     async def list_content(self, user_id: int, status: str | None = None, start: datetime | None = None, end: datetime | None = None) -> list[dict]:
         query = select(ContentItem).where(ContentItem.creator_user_id == user_id).order_by(ContentItem.scheduled_at, ContentItem.created_at.desc())

@@ -13,7 +13,7 @@ class YouTubeIntegration(SocialPlatform):
     api_url = "https://www.googleapis.com/youtube/v3"
 
     def get_authorization_url(self, state: str) -> str:
-        return oauth_url(self.auth_url, {"client_id": self.settings.youtube_client_id, "redirect_uri": self.settings.youtube_redirect_uri, "response_type": "code", "scope": "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly", "access_type": "offline", "prompt": "consent", "state": state})
+        return oauth_url(self.auth_url, {"client_id": self.settings.youtube_client_id, "redirect_uri": self.settings.youtube_redirect_uri, "response_type": "code", "scope": "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/yt-analytics.readonly", "access_type": "offline", "prompt": "consent", "state": state})
 
     async def exchange_code_for_token(self, code: str) -> TokenData:
         data = await self._request("POST", self.token_url, data={"code": code, "client_id": self.settings.youtube_client_id, "client_secret": self.settings.youtube_client_secret, "redirect_uri": self.settings.youtube_redirect_uri, "grant_type": "authorization_code"})
@@ -47,6 +47,31 @@ class YouTubeIntegration(SocialPlatform):
             content = item.get("contentDetails", {})
             items.append(NormalizedVideo(item["id"], snippet.get("title"), snippet.get("description"), f"https://www.youtube.com/watch?v={item['id']}", snippet.get("thumbnails", {}).get("high", {}).get("url"), _parse_datetime(snippet.get("publishedAt")), _duration_seconds(content.get("duration")), _integer(stats.get("viewCount")), _integer(stats.get("likeCount")), _integer(stats.get("commentCount")), item))
         return VideoPage(items, search.get("nextPageToken"))
+
+    async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
+        media = await self.client.get(media_url)
+        if media.status_code >= 400:
+            raise PlatformAPIError(f"YouTube media download returned HTTP {media.status_code}")
+        content_type = media.headers.get("content-type", "video/mp4")
+        response = await self.client.post(
+            "https://www.googleapis.com/upload/youtube/v3/videos",
+            params={"uploadType": "resumable", "part": "snippet,status"},
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": content_type, "X-Upload-Content-Length": str(len(media.content))},
+            json={"snippet": {"title": title, "description": description or ""}, "status": {"privacyStatus": "private"}},
+        )
+        if response.status_code >= 400:
+            raise PlatformAPIError(f"YouTube upload session returned HTTP {response.status_code}")
+        upload_url = response.headers.get("location")
+        if not upload_url:
+            raise PlatformAPIError("YouTube upload session did not return a location")
+        uploaded = await self.client.put(upload_url, headers={"Authorization": f"Bearer {access_token}", "Content-Type": content_type}, content=media.content)
+        if uploaded.status_code >= 400:
+            raise PlatformAPIError(f"YouTube video upload returned HTTP {uploaded.status_code}")
+        data = uploaded.json()
+        video_id = data.get("id")
+        if not video_id:
+            raise PlatformAPIError("YouTube upload response did not include a video ID")
+        return NormalizedVideo(video_id, title, description, f"https://www.youtube.com/watch?v={video_id}", raw_data=data)
 
     async def get_analytics(self, access_token: str, start_date: date, end_date: date) -> dict[str, Any]:
         if type(start_date) is not date or type(end_date) is not date:

@@ -96,6 +96,9 @@ class SocialPlatform(ABC):
     async def get_videos(self, access_token: str, cursor: str | None = None) -> VideoPage:
         raise NotImplementedError
 
+    async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
+        raise UnsupportedPlatformError(f"{self.platform.value} does not support video publishing")
+
     async def close(self) -> None:
         await self.client.aclose()
 

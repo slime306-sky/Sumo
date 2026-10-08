@@ -72,13 +72,28 @@ GET            /api/v1/campaigns
 POST/GET       /api/v1/brands/me/collaborations
 GET/PATCH      /api/v1/creators/me/collaborations
 POST/GET       /api/v1/content
+POST            /api/v1/content/upload
 GET            /api/v1/content/calendar?start=...&end=...
 GET            /api/v1/content/history
 GET            /api/v1/analytics/overview
 POST/GET       /api/v1/analytics/accounts/{account_id}/snapshots
 ```
 
-Scheduled content is stored for calendar and history workflows; this API does not yet run a background scheduler. `POST /api/v1/content/{content_id}/publish` returns `501` because the current Facebook integration is read-only and YouTube OAuth requests read-only access. Enabling publishing requires provider write permissions and upload implementations. Audience snapshots can be recorded through the analytics endpoint; current integrations do not fetch follower counts.
+Scheduled content is stored for calendar and history workflows; this API does not yet run a background scheduler. `POST /api/v1/content/{content_id}/publish` publishes the content media URL to every selected account. Reconnect YouTube accounts after this change so the consent includes `youtube.upload`; Facebook publishing requires a Page account connected with `pages_manage_posts` and a publicly reachable video URL. YouTube uploads are private by default and can be made public through the provider after publishing. Audience snapshots can be recorded through the analytics endpoint; current integrations do not fetch follower counts.
+
+Video files can be uploaded directly to Cloudinary before creating content:
+
+```text
+POST /api/v1/content/upload
+Content-Type: multipart/form-data
+Authorization: Bearer YOUR_TOKEN
+file=@./video.mp4
+```
+
+The response contains `media_url`. Pass that value as `media_url` when creating
+content, then call the publish endpoint. Configure `CLOUDINARY_CLOUD_NAME`,
+`CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `.env`; the default upload
+limit is 500 MB and can be changed with `MAX_VIDEO_UPLOAD_BYTES`.
 
 ## Tests
 
