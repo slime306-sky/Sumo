@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     oauth_success_redirect: str = "http://localhost:3000/settings/social"
     request_timeout_seconds: float = 20.0
     enabled_social_platforms: str = "youtube,facebook"
+    cors_origins: str = "http://localhost:3000"
     facebook_app_id: str | None = None
     facebook_app_secret: str | None = None
     facebook_config_id: str | None = None
@@ -26,6 +27,10 @@ class Settings(BaseSettings):
     @property
     def enabled_platform_names(self) -> frozenset[str]:
         return frozenset(name.strip().lower() for name in self.enabled_social_platforms.split(",") if name.strip())
+
+    @property
+    def cors_origin_names(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

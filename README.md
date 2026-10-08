@@ -11,7 +11,10 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Set `DATABASE_URL` and `SECRET_KEY` in `.env`. Start PostgreSQL and create the `sumo` database, then run:
+Set `DATABASE_URL`, `SECRET_KEY`, and `CORS_ORIGINS` in `.env`. `CORS_ORIGINS` accepts
+multiple origins separated by commas, for example
+`CORS_ORIGINS=http://localhost:3000,https://app.example.com`. Start PostgreSQL and
+create the `sumo` database, then run:
 
 `ENABLED_SOCIAL_PLATFORMS` controls which platform APIs are available. It defaults to `youtube,facebook`; add a platform name there when its integration is ready to re-enable.
 

@@ -2,8 +2,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.integrations.base import RateLimitError, SocialIntegrationError
 from app.services.platform_service import PlatformTemporarilyDisabledError
@@ -16,6 +18,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Sumo Social API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origin_names,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(api_router)
 
 
