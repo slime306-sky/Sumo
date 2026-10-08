@@ -1,31 +1,39 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.api.v1.router import api_router
-from app.core.config import settings
-from app.db.session import create_tables
-
-
-app = FastAPI(title=settings.app_name)
-
-if settings.cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+from app.api.router import api_router
+from app.core.logging import configure_logging
+from app.integrations.base import RateLimitError, SocialIntegrationError
+from app.services.platform_service import PlatformTemporarilyDisabledError
 
 
-@app.on_event("startup")
-def on_startup() -> None:
-    create_tables()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    configure_logging()
+    yield
 
 
-app.include_router(api_router, prefix=settings.api_v1_prefix)
+app = FastAPI(title="Sumo Social API", version="0.1.0", lifespan=lifespan)
+app.include_router(api_router)
 
 
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"message": "Sumo backend is running"}
+@app.get("/health", tags=["health"])
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.exception_handler(RateLimitError)
+async def rate_limit_handler(_, __) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"detail": "Platform rate limit reached"})
+
+
+@app.exception_handler(SocialIntegrationError)
+async def integration_error_handler(_, __) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": "Social platform request failed"})
+
+
+@app.exception_handler(PlatformTemporarilyDisabledError)
+async def disabled_platform_handler(_, __) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "Platform temporarily disabled"})

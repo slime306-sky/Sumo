@@ -1,30 +1,32 @@
-from typing import Any, Annotated
+from functools import lru_cache
 
-from pydantic import field_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Sumo Auth API"
-    api_v1_prefix: str = "/api/v1"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sumo"
-    secret_key: str = "change-this-secret-key"
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24
-    cors_origins: Annotated[list[str], NoDecode] = []
-
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: Any) -> list[str]:
-        if value is None or value == "":
-            return []
-
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-
-        return value
+    app_name: str = "Sumo Social API"
+    app_env: str = "development"
+    secret_key: str = Field(default="change-me", min_length=1)
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/sumo"
+    oauth_success_redirect: str = "http://localhost:3000/settings/social"
+    request_timeout_seconds: float = 20.0
+    enabled_social_platforms: str = "youtube,facebook"
+    facebook_app_id: str | None = None
+    facebook_app_secret: str | None = None
+    facebook_config_id: str | None = None
+    facebook_redirect_uri: str | None = None
+    youtube_client_id: str | None = None
+    youtube_client_secret: str | None = None
+    youtube_redirect_uri: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    @property
+    def enabled_platform_names(self) -> frozenset[str]:
+        return frozenset(name.strip().lower() for name in self.enabled_social_platforms.split(",") if name.strip())
 
-settings = Settings()
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

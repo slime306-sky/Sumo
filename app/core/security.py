@@ -1,23 +1,26 @@
-from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import secrets
 
-from jose import jwt
-from passlib.context import CryptContext
-
-from app.core.config import settings
-
-
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+from app.core.config import get_settings
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def create_oauth_state(user_id: int, platform: str) -> str:
+    payload = f"{user_id}:{platform}:{secrets.token_urlsafe(24)}"
+    signature = hmac.new(get_settings().secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{signature}"
 
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
-    payload = {"sub": subject, "exp": expire}
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+def validate_oauth_state(state: str, platform: str, expected_user_id: int | None = None) -> int | None:
+    parts = state.split(":", 3)
+    if len(parts) != 4 or parts[1] != platform:
+        return None
+    try:
+        user_id = int(parts[0])
+    except ValueError:
+        return None
+    if expected_user_id is not None and user_id != expected_user_id:
+        return None
+    payload, signature = state.rsplit(":", 1)
+    expected = hmac.new(get_settings().secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return user_id if hmac.compare_digest(signature, expected) else None
