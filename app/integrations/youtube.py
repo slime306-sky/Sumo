@@ -1,4 +1,6 @@
 from datetime import datetime
+from datetime import date
+from typing import Any
 
 from app.integrations.base import NormalizedVideo, PlatformAPIError, ProfileData, SocialPlatform, TokenData, VideoPage, oauth_url
 from app.models.social_account import Platform
@@ -11,7 +13,7 @@ class YouTubeIntegration(SocialPlatform):
     api_url = "https://www.googleapis.com/youtube/v3"
 
     def get_authorization_url(self, state: str) -> str:
-        return oauth_url(self.auth_url, {"client_id": self.settings.youtube_client_id, "redirect_uri": self.settings.youtube_redirect_uri, "response_type": "code", "scope": "https://www.googleapis.com/auth/youtube.readonly", "access_type": "offline", "prompt": "consent", "state": state})
+        return oauth_url(self.auth_url, {"client_id": self.settings.youtube_client_id, "redirect_uri": self.settings.youtube_redirect_uri, "response_type": "code", "scope": "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly", "access_type": "offline", "prompt": "consent", "state": state})
 
     async def exchange_code_for_token(self, code: str) -> TokenData:
         data = await self._request("POST", self.token_url, data={"code": code, "client_id": self.settings.youtube_client_id, "client_secret": self.settings.youtube_client_secret, "redirect_uri": self.settings.youtube_redirect_uri, "grant_type": "authorization_code"})
@@ -45,6 +47,41 @@ class YouTubeIntegration(SocialPlatform):
             content = item.get("contentDetails", {})
             items.append(NormalizedVideo(item["id"], snippet.get("title"), snippet.get("description"), f"https://www.youtube.com/watch?v={item['id']}", snippet.get("thumbnails", {}).get("high", {}).get("url"), _parse_datetime(snippet.get("publishedAt")), _duration_seconds(content.get("duration")), _integer(stats.get("viewCount")), _integer(stats.get("likeCount")), _integer(stats.get("commentCount")), item))
         return VideoPage(items, search.get("nextPageToken"))
+
+    async def get_analytics(self, access_token: str, start_date: date, end_date: date) -> dict[str, Any]:
+        common = {
+            "ids": "channel==MINE",
+            "startDate": start_date.isoformat(),
+            "endDate": end_date.isoformat(),
+            "access_token": access_token,
+        }
+        summary = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost")
+        daily = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost", "day")
+        monthly = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,subscribersGained,subscribersLost", "month")
+        traffic_sources = await self._report(access_token, common, "views,estimatedMinutesWatched", "insightTrafficSourceType")
+        geography = await self._report(access_token, common, "views,estimatedMinutesWatched", "country")
+        playback_location = await self._report(access_token, common, "views,estimatedMinutesWatched", "insightPlaybackLocationType")
+        age_gender = await self._report(access_token, common, "viewerPercentage", "ageGroup,gender")
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "summary": summary,
+            "daily": daily,
+            "monthly": monthly,
+            "traffic_sources": traffic_sources,
+            "geography": geography,
+            "playback_location": playback_location,
+            "age_gender": age_gender,
+        }
+
+    async def _report(self, access_token: str, common: dict[str, str], metrics: str, dimensions: str | None = None) -> list[dict[str, Any]]:
+        params = {**common, "metrics": metrics}
+        if dimensions:
+            params["dimensions"] = dimensions
+            params["sort"] = dimensions
+        data = await self._request("GET", "https://youtubeanalytics.googleapis.com/v2/reports", params=params)
+        headers = [column["name"] for column in data.get("columnHeaders", [])]
+        return [dict(zip(headers, row, strict=True)) for row in data.get("rows", [])]
 
 
 def _integer(value: str | None) -> int | None:

@@ -45,6 +45,12 @@ POST /api/v1/auth/login
 Registration requires a unique `login_id`, password, and `role` (`creator` or `brand`). Passwords are stored as PBKDF2 hashes, and access tokens are signed and expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`. Tokens are stored server-side and are never returned by API schemas or logged.
 
 YouTube sync handles API page tokens. Facebook sync handles Graph API cursors.
+YouTube analytics are available at
+`GET /api/v1/analytics/accounts/{account_id}/youtube?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`.
+The response includes views, likes, comments, shares, watch time, retention,
+subscribers gained/lost, traffic sources, geography, daily/monthly data,
+playback location, and age/gender. Reconnect YouTube accounts after enabling
+analytics so the OAuth consent includes the analytics read-only scope.
 
 ## Creator and brand workflows
 

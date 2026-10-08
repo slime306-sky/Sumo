@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.integrations.youtube import YouTubeIntegration
+from app.models.social_account import Platform
 from app.api.v1.social_accounts import current_user_id
 from app.schemas.creator_platform import MetricSnapshotCreate, MetricSnapshotResponse
 from app.services.creator_platform_service import CreatorPlatformService
+from app.services.social_account_service import SocialAccountService
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -29,6 +34,26 @@ async def account_analytics(account_id: int, db: AsyncSession = Depends(get_db),
     if analytics is None:
         raise HTTPException(status_code=404, detail="Social account not found")
     return analytics
+
+
+@router.get("/accounts/{account_id}/youtube")
+async def youtube_analytics(
+    account_id: int,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(current_user_id),
+) -> dict:
+    settings = get_settings()
+    account = await SocialAccountService(db, settings).get_account(user_id, account_id)
+    if account is None or account.platform != Platform.YOUTUBE:
+        raise HTTPException(status_code=404, detail="YouTube account not found")
+    end = end_date or date.today()
+    start = start_date or end - timedelta(days=28)
+    if start > end:
+        raise HTTPException(status_code=422, detail="start_date must be before or equal to end_date")
+    token = await SocialAccountService(db, settings).valid_token(account)
+    return await YouTubeIntegration(settings).get_analytics(token, start, end)
 
 
 @router.post("/accounts/{account_id}/snapshots", response_model=MetricSnapshotResponse, status_code=status.HTTP_201_CREATED)
