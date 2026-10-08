@@ -11,6 +11,26 @@ This document describes the API implemented by the current FastAPI backend. Path
 - Most creator/brand-owned endpoints require `Authorization: Bearer <access_token>`.
 - Public discovery routes do not require authentication.
 
+### Production OAuth configuration
+
+For a deployed Render service, configure the provider redirect URIs with the
+public HTTPS service URL, not `localhost`:
+
+```text
+https://YOUR-RENDER-DOMAIN.onrender.com/api/v1/social/facebook/callback
+https://YOUR-RENDER-DOMAIN.onrender.com/api/v1/social/youtube/callback
+```
+
+Set the matching values in Render:
+
+```env
+FACEBOOK_REDIRECT_URI=https://YOUR-RENDER-DOMAIN.onrender.com/api/v1/social/facebook/callback
+YOUTUBE_REDIRECT_URI=https://YOUR-RENDER-DOMAIN.onrender.com/api/v1/social/youtube/callback
+```
+
+The callback URL must match the provider configuration exactly. Localhost
+redirects may remain registered for local development.
+
 ### Authentication
 
 `POST /auth/register` accepts `{ "login_id": "creator_1", "password": "a-strong-password", "role": "creator" }`.
@@ -84,7 +104,10 @@ Begins OAuth for the specified supported platform. Authenticate the request with
 
 ### `GET /social/{platform}/callback`
 
-OAuth redirect target. The provider supplies `code`; the API uses the signed `state` to recover the owner ID. `Authorization: Bearer <access_token>` is optional and, if supplied, must match the state.
+OAuth redirect target. The provider supplies `code`; the API uses the signed
+state to recover the owner ID. No application bearer token is required on this
+provider callback because ownership is established by the signed state created
+by the authenticated `/connect` request.
 
 **Query parameters**
 
@@ -678,6 +701,32 @@ The first YouTube connection must be reconnected after enabling this feature so
 the OAuth token includes the `yt-analytics.readonly` scope.
 
 **Errors:** `404` account not found/owned.
+
+### Facebook Page analytics
+
+Facebook Page analytics are not currently exposed by an API endpoint. The
+existing Facebook connection stores the connected Facebook identity and
+supports the current account/video workflows, but it does not yet select a
+Facebook Page, obtain a Page Access Token, or call the Page Insights API.
+
+The planned endpoint is:
+
+```text
+GET /analytics/accounts/{account_id}/facebook
+```
+
+The planned response will group supported Meta Page Insights by reach/views,
+post engagements, reactions, comments, shares, followers/follows/unfollows,
+video views and unique viewers, geography, language, daily/weekly/28-day
+periods, CTA clicks, post-level performance, and available audience
+demographics.
+
+Implementing this endpoint requires the Facebook OAuth flow to request
+`pages_show_list`, `pages_read_engagement`, and `read_insights`, then allow the
+creator to select a managed Page. The Meta app must include the Render
+hostname in **App Domains** and the exact HTTPS callback in **Valid OAuth
+Redirect URIs**. Some Page Insights metrics are version-dependent or
+deprecated and may be returned as empty or unavailable.
 
 ### `POST /analytics/accounts/{account_id}/snapshots`
 
