@@ -63,11 +63,18 @@ async def test_youtube_monthly_analytics_uses_month_boundaries():
     monthly_params = client.requests[2][2]["params"]
     assert monthly_params["dimensions"] == "month"
     assert monthly_params["startDate"] == "2026-09-01"
-    assert monthly_params["endDate"] == "2026-10-31"
+    assert monthly_params["endDate"] == "2026-09-30"
 
 
 def test_youtube_date_range_rejects_reversed_dates():
     with pytest.raises(HTTPException) as error:
         _youtube_date_range(date(2026, 10, 9), date(2026, 10, 8))
+
+    assert error.value.status_code == 422
+
+
+def test_youtube_date_range_rejects_today_as_end_date():
+    with pytest.raises(HTTPException) as error:
+        _youtube_date_range(date.today(), date.today())
 
     assert error.value.status_code == 422

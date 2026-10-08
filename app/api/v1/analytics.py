@@ -17,12 +17,13 @@ YOUTUBE_LAUNCH_DATE = date(2005, 2, 14)
 
 
 def _youtube_date_range(start_date: date | None, end_date: date | None) -> tuple[date, date]:
-    end = end_date or date.today()
+    latest_available_date = date.today() - timedelta(days=1)
+    end = end_date or latest_available_date
     start = start_date or end - timedelta(days=28)
     if start > end:
         raise HTTPException(status_code=422, detail="start_date must be before or equal to end_date")
-    if start < YOUTUBE_LAUNCH_DATE or end > date.today():
-        raise HTTPException(status_code=422, detail="YouTube dates must be between 2005-02-14 and today")
+    if start < YOUTUBE_LAUNCH_DATE or end > latest_available_date:
+        raise HTTPException(status_code=422, detail="YouTube dates must be between 2005-02-14 and yesterday")
     return start, end
 
 
