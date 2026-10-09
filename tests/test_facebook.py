@@ -38,6 +38,7 @@ def test_facebook_authorization_url_requests_page_permissions():
         "pages_read_engagement",
         "pages_manage_posts",
     ]
+    assert query["auth_type"] == ["rerequest"]
     assert query["state"] == ["signed-state"]
 
 
@@ -93,7 +94,7 @@ async def test_managed_page_requires_a_page_token():
     client = RecordingClient([FakeResponse({"data": [{"id": "page-123"}]})])
     integration = FacebookIntegration(Settings(), client=client)
 
-    with pytest.raises(PlatformAPIError, match="no managed Page"):
+    with pytest.raises(PlatformAPIError, match="included both a Page ID and Page Access Token"):
         await integration.managed_page("user-token")
 
 
@@ -133,7 +134,7 @@ async def test_publish_video_requires_a_managed_page():
     client = RecordingClient([FakeResponse({"data": []})])
     integration = FacebookIntegration(Settings(), client=client)
 
-    with pytest.raises(PlatformAPIError, match="no managed Page with a Page access token"):
+    with pytest.raises(PlatformAPIError, match="no managed Pages"):
         await integration.publish_video("user-token", "https://cdn.example.com/video.mp4", "Launch video")
 
 
@@ -153,5 +154,27 @@ async def test_publish_video_skips_pages_without_page_tokens():
     )
     integration = FacebookIntegration(Settings(), client=client)
 
-    with pytest.raises(PlatformAPIError, match="reconnect Facebook"):
+    with pytest.raises(PlatformAPIError, match="included both a Page ID and Page Access Token"):
         await integration.publish_video("user-token", "https://cdn.example.com/video.mp4", "Launch video")
+
+
+@pytest.mark.asyncio
+async def test_managed_page_reports_graph_api_errors():
+    client = RecordingClient([FakeResponse({"error": {"code": 200, "message": "Permissions error"}}, status_code=403)])
+    integration = FacebookIntegration(Settings(), client=client)
+
+    with pytest.raises(PlatformAPIError, match="HTTP 403: Permissions error"):
+        await integration.managed_page("user-token")
+
+
+@pytest.mark.asyncio
+async def test_managed_page_logs_page_shape_without_tokens(caplog):
+    caplog.set_level("INFO")
+    client = RecordingClient([FakeResponse({"data": [{"id": "page-123"}, {"name": "No ID"}]})])
+    integration = FacebookIntegration(Settings(), client=client)
+
+    with pytest.raises(PlatformAPIError, match="included both a Page ID and Page Access Token"):
+        await integration.managed_page("user-token")
+
+    assert "Facebook managed Pages lookup completed" in caplog.text
+    assert "page-token" not in caplog.text

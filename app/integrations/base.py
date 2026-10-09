@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import logging
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -8,6 +9,8 @@ import httpx
 
 from app.core.config import Settings
 from app.models.social_account import Platform
+
+logger = logging.getLogger(__name__)
 
 
 class SocialIntegrationError(Exception):
@@ -91,6 +94,9 @@ class SocialPlatform(ABC):
     async def verify_permissions(self, access_token: str) -> None:
         return None
 
+    async def verify_token_owner(self, access_token: str, platform_user_id: str) -> None:
+        return None
+
     @abstractmethod
     async def get_profile(self, access_token: str) -> ProfileData:
         raise NotImplementedError
@@ -121,6 +127,22 @@ class SocialPlatform(ABC):
             headers["Authorization"] = f"Bearer {access_token}"
             kwargs["headers"] = headers
         response = await self.client.request(method, url, **kwargs)
+        if self.platform == Platform.FACEBOOK:
+            error = {}
+            try:
+                error = response.json().get("error", {})
+            except (ValueError, AttributeError):
+                pass
+            logger.info(
+                "Facebook Graph API response",
+                extra={
+                    "method": method,
+                    "path": url.split("?", 1)[0],
+                    "status_code": response.status_code,
+                    "graph_error_code": error.get("code"),
+                    "graph_error_message": error.get("message"),
+                },
+            )
         if response.status_code == 429:
             raise RateLimitError(f"{self.platform.value} rate limit reached")
         if response.status_code >= 400:

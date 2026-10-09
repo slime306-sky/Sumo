@@ -24,6 +24,7 @@ class FacebookIntegration(SocialPlatform):
                 "config_id": self.settings.facebook_config_id,
                 "response_type": "code",
                 "scope": ",".join(self.required_permissions),
+                "auth_type": "rerequest",
                 "state": state,
             },
         )
@@ -40,6 +41,11 @@ class FacebookIntegration(SocialPlatform):
         if missing:
             raise PlatformAPIError("Facebook did not grant required permissions: " + ", ".join(missing) + ". Reconnect Facebook and approve all requested permissions.")
 
+    async def verify_token_owner(self, access_token: str, platform_user_id: str) -> None:
+        profile = await self.get_profile(access_token)
+        if profile.platform_user_id != platform_user_id:
+            raise PlatformAPIError("Facebook token belongs to a different account than the connected SUMO account")
+
     async def get_profile(self, access_token: str) -> ProfileData:
         data = await self._request("GET", f"{self.graph_url}/me", params={"fields": "id,name,picture", "access_token": access_token})
         return ProfileData(data["id"], None, data.get("name"), data.get("picture", {}).get("data", {}).get("url"))
@@ -50,7 +56,10 @@ class FacebookIntegration(SocialPlatform):
         pages: list[dict] = []
         while url:
             data = await self._request("GET", url, params=params)
-            pages.extend(data.get("data", []))
+            batch = data.get("data")
+            if not isinstance(batch, list):
+                raise PlatformAPIError("Facebook managed Page response did not contain a valid data list")
+            pages.extend(page for page in batch if isinstance(page, dict))
             url = data.get("paging", {}).get("next")
             params = {"access_token": access_token} if url else {}
         valid_pages = [page for page in pages if page.get("id") and page.get("access_token")]
@@ -63,8 +72,10 @@ class FacebookIntegration(SocialPlatform):
                 "missing_page_token_count": sum(1 for page in pages if page.get("id") and not page.get("access_token")),
             },
         )
+        if not pages:
+            raise PlatformAPIError("Facebook returned no managed Pages. Confirm this Facebook user has sufficient access to at least one Page.")
         if not valid_pages:
-            raise PlatformAPIError("Facebook returned no managed Page with a Page access token. Verify the user has Page access and reconnect Facebook after granting pages_show_list, pages_read_engagement, and pages_manage_posts.")
+            raise PlatformAPIError("Facebook returned managed Pages, but none included both a Page ID and Page Access Token. Confirm this user has sufficient Page access and that the token can retrieve Page tokens.")
         return valid_pages[0]
 
     async def get_videos(self, access_token: str, cursor: str | None = None) -> VideoPage:

@@ -244,6 +244,7 @@ class CreatorPlatformService:
                 media_url = target.media_url or item.media_url
                 caption = target.caption if target.caption is not None else item.caption
                 integration = get_integration(account.platform, self.settings)
+                await integration.verify_token_owner(token, account.platform_user_id)
                 if target.post_type == "text":
                     published = await integration.publish_text(token, caption or "")
                 elif target.post_type == "image":
