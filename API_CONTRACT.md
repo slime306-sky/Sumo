@@ -614,9 +614,17 @@ Lists requests sent by the current company.
 
 **200 response:** array of `CollaborationResponse` objects.
 
+Each collaboration response also includes `company_name`, `company_email`,
+`company_category` (the company's industry), `campaign_title`, and
+`campaign_status`.
+
 ### `GET /creators/me/collaborations`
 
 Lists requests received by the current creator.
+
+Each collaboration response includes the company name, company email, company
+category, campaign title, and campaign status, in addition to the budget and
+collaboration status.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -653,6 +661,18 @@ Updates progress on an accepted request.
 ```
 
 Allowed values: `in_progress`, `completed`, `cancelled`. The request must already be `accepted` or `in_progress`.
+
+### `POST /companies/me/collaborations/{request_id}/complete`
+
+Completes a collaboration owned by the authenticated company. The request must
+already be `accepted` or `in_progress`.
+
+**Headers:** `Authorization: Bearer COMPANY_TOKEN`
+
+**200 response:** updated `CollaborationResponse` with `status: "completed"`.
+
+**Errors:** `404` collaboration request not found/owned; `409` collaboration
+is not currently accepted or in progress.
 
 **200 response:** updated `CollaborationResponse`.
 

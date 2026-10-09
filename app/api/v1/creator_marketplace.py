@@ -123,6 +123,22 @@ async def update_collaboration_progress(request_id: int, values: CollaborationPr
     return request
 
 
+@router.post("/companies/me/collaborations/{request_id}/complete", response_model=CollaborationResponse)
+async def complete_collaboration(request_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> CollaborationResponse:
+    try:
+        request = await CreatorPlatformService(db, get_settings()).update_collaboration(
+            user_id,
+            request_id,
+            "completed",
+            as_creator=False,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if request is None:
+        raise HTTPException(status_code=404, detail="Collaboration request not found")
+    return request
+
+
 @router.get("/creators/me/collaborations", response_model=list[CollaborationResponse])
 async def received_collaborations(db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> list[CollaborationResponse]:
     return await CreatorPlatformService(db, get_settings()).list_collaborations(user_id, as_creator=True)

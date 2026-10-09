@@ -9,6 +9,7 @@ from app.integrations.base import PlatformAPIError, SocialIntegrationError
 from app.integrations.registry import get_integration
 from app.models.creator_platform import AccountMetricSnapshot, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
 from app.models.registration_profile import Company
+from app.models.user import User
 from app.models.social_account import SocialAccount
 from app.models.social_video import SocialVideo
 from app.schemas.creator_platform import CampaignCreate, CampaignUpdate, CollaborationCreate, CompanyProfileCreate, CompanyProfileUpdate, ContentCreate, ContentUpdate, CreatorProfileCreate, CreatorProfileUpdate, MetricSnapshotCreate
@@ -396,10 +397,34 @@ class CreatorPlatformService:
         await self.db.refresh(request)
         return request
 
-    async def list_collaborations(self, user_id: int, as_creator: bool) -> list[CollaborationRequest]:
+    async def list_collaborations(self, user_id: int, as_creator: bool) -> list[dict]:
         column = CollaborationRequest.creator_user_id if as_creator else CollaborationRequest.company_user_id
-        result = await self.db.execute(select(CollaborationRequest).where(column == user_id).order_by(CollaborationRequest.created_at.desc()))
-        return list(result.scalars().all())
+        result = await self.db.execute(
+            select(CollaborationRequest, Company, User, Campaign)
+            .outerjoin(Company, Company.user_id == CollaborationRequest.company_user_id)
+            .outerjoin(User, User.id == CollaborationRequest.company_user_id)
+            .outerjoin(Campaign, Campaign.id == CollaborationRequest.campaign_id)
+            .where(column == user_id)
+            .order_by(CollaborationRequest.created_at.desc())
+        )
+        return [
+            {
+                "id": request.id,
+                "company_user_id": request.company_user_id,
+                "creator_user_id": request.creator_user_id,
+                "campaign_id": request.campaign_id,
+                "budget": request.budget,
+                "message": request.message,
+                "status": request.status,
+                "created_at": request.created_at,
+                "company_name": company.company_name if company else None,
+                "company_email": user.email if user else None,
+                "company_category": company.industry if company else None,
+                "campaign_title": campaign.title if campaign else None,
+                "campaign_status": campaign.status if campaign else None,
+            }
+            for request, company, user, campaign in result.all()
+        ]
 
     async def update_collaboration(self, user_id: int, request_id: int, status: str, as_creator: bool) -> CollaborationRequest | None:
         column = CollaborationRequest.creator_user_id if as_creator else CollaborationRequest.company_user_id

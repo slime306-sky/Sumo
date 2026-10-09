@@ -205,6 +205,11 @@ class CollaborationResponse(BaseModel):
     message: str | None = None
     status: str
     created_at: datetime
+    company_name: str | None = None
+    company_email: str | None = None
+    company_category: str | None = None
+    campaign_title: str | None = None
+    campaign_status: str | None = None
 
 
 class CollaborationDecision(BaseModel):
