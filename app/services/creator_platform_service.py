@@ -1,9 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.time import assume_india_timezone, now_utc
 from app.integrations.base import PlatformAPIError, SocialIntegrationError
 from app.integrations.registry import get_integration
 from app.models.creator_platform import AccountMetricSnapshot, BrandProfile, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
@@ -122,22 +123,28 @@ class CreatorPlatformService:
     def _validate_schedule(self, scheduled_at: datetime | None, account_ids: list[int]) -> None:
         if scheduled_at is None:
             return
-        if scheduled_at.tzinfo is None or scheduled_at.utcoffset() is None:
-            raise ValueError("scheduled_at must include a timezone")
-        if scheduled_at <= datetime.now(timezone.utc):
+        if assume_india_timezone(scheduled_at) <= now_utc():
             raise ValueError("scheduled_at must be in the future")
         if not account_ids:
             raise ValueError("Scheduled content requires at least one social account")
 
     async def create_content(self, user_id: int, values: ContentCreate) -> dict:
+        if values.scheduled_at is not None:
+            values.scheduled_at = assume_india_timezone(values.scheduled_at)
         self._validate_schedule(values.scheduled_at, values.social_account_ids)
-        await self._owned_targets(user_id, values.social_account_ids)
+        accounts = await self._owned_targets(user_id, values.social_account_ids)
+        accounts_by_id = {account.id: account for account in accounts}
         item = ContentItem(creator_user_id=user_id, caption=values.caption, media_url=values.media_url, scheduled_at=values.scheduled_at, status="scheduled" if values.scheduled_at else "draft")
         self.db.add(item)
         await self.db.flush()
         target_content = {target.social_account_id: target for target in values.target_content}
         for account_id in values.social_account_ids:
             override = target_content.get(account_id)
+            platform_settings = (
+                override.platform_settings
+                if override and override.platform_settings
+                else values.youtube if accounts_by_id[account_id].platform.value == "youtube" else values.facebook
+            )
             self.db.add(
                 ContentTarget(
                     content_item_id=item.id,
@@ -145,6 +152,7 @@ class CreatorPlatformService:
                     post_type=override.post_type if override else "video",
                     caption=override.caption if override else None,
                     media_url=override.media_url if override else None,
+                    platform_settings=platform_settings,
                 )
             )
         await self.db.commit()
@@ -164,24 +172,31 @@ class CreatorPlatformService:
         data = values.model_dump(exclude_unset=True)
         account_ids = data.pop("social_account_ids", None)
         target_content = data.pop("target_content", None)
+        youtube_settings = data.pop("youtube", None)
+        facebook_settings = data.pop("facebook", None)
         scheduled_at = data.get("scheduled_at", item.scheduled_at)
+        if scheduled_at is not None:
+            scheduled_at = assume_india_timezone(scheduled_at)
+            data["scheduled_at"] = scheduled_at
         if account_ids is None:
             result = await self.db.execute(select(ContentTarget.social_account_id).where(ContentTarget.content_item_id == item.id))
             account_ids = list(result.scalars().all())
         self._validate_schedule(scheduled_at, account_ids)
+        owned_accounts = await self._owned_targets(user_id, account_ids)
+        accounts_by_id = {account.id: account for account in owned_accounts}
         if "caption" in data or "media_url" in data:
             caption = data.get("caption", item.caption)
             media_url = data.get("media_url", item.media_url)
             if not (caption or media_url):
                 raise ValueError("Provide a caption or media URL")
         if "social_account_ids" in values.model_fields_set:
-            await self._owned_targets(user_id, account_ids)
             await self.db.execute(delete(ContentTarget).where(ContentTarget.content_item_id == item.id))
             target_content_by_account = {
                 target["social_account_id"]: target for target in target_content or []
             }
             for account_id in account_ids:
                 override = target_content_by_account.get(account_id, {})
+                platform = accounts_by_id[account_id].platform.value
                 self.db.add(
                     ContentTarget(
                         content_item_id=item.id,
@@ -189,6 +204,10 @@ class CreatorPlatformService:
                         post_type=override.get("post_type", "video"),
                         caption=override.get("caption"),
                         media_url=override.get("media_url"),
+                        platform_settings=override.get(
+                            "platform_settings",
+                            youtube_settings if platform == "youtube" else facebook_settings,
+                        ) or {},
                     )
                 )
         elif target_content is not None:
@@ -201,6 +220,18 @@ class CreatorPlatformService:
                 target.caption = override.get("caption")
                 target.media_url = override.get("media_url")
                 target.post_type = override.get("post_type", "video")
+                if "platform_settings" in override:
+                    target.platform_settings = override["platform_settings"]
+        if youtube_settings is not None or facebook_settings is not None:
+            result = await self.db.execute(
+                select(ContentTarget, SocialAccount)
+                .join(SocialAccount, SocialAccount.id == ContentTarget.social_account_id)
+                .where(ContentTarget.content_item_id == item.id)
+            )
+            for target, account in result.all():
+                settings = youtube_settings if account.platform.value == "youtube" else facebook_settings
+                if settings is not None:
+                    target.platform_settings = settings
         for key, value in data.items():
             setattr(item, key, value)
         item.status = "scheduled" if item.scheduled_at else "draft"
@@ -251,7 +282,13 @@ class CreatorPlatformService:
                     published = await integration.publish_image(token, media_url or "", caption)
                 else:
                     title = (caption or "Untitled video")[:100]
-                    published = await integration.publish_video(token, media_url or "", title, caption)
+                    published = await integration.publish_video(
+                        token,
+                        media_url or "",
+                        title,
+                        caption,
+                        target.platform_settings,
+                    )
             except SocialIntegrationError as exc:
                 target.status = "failed"
                 failures.append(f"{account.platform.value}: {exc}")
@@ -266,7 +303,7 @@ class CreatorPlatformService:
             await self.db.commit()
             raise PlatformAPIError("Publishing failed: " + "; ".join(failures))
         item.status = "published"
-        item.published_at = datetime.now(timezone.utc)
+        item.published_at = now_utc()
         await self.db.commit()
         return await self._content_response(item)
 

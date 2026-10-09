@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/sumo"
     oauth_success_redirect: str = "http://localhost:3000/settings/social"
     request_timeout_seconds: float = 20.0
+    app_timezone: str = "Asia/Kolkata"
     enabled_social_platforms: str = "youtube,facebook"
     cors_origins: str = "http://localhost:3000"
     facebook_app_id: str | None = None

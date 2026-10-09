@@ -70,6 +70,8 @@ class ContentCreate(BaseModel):
     social_account_ids: list[int] = Field(default_factory=list)
     target_content: list["ContentTargetInput"] = Field(default_factory=list)
     scheduled_at: datetime | None = None
+    youtube: dict = Field(default_factory=dict)
+    facebook: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def require_content(self):
@@ -93,6 +95,8 @@ class ContentUpdate(BaseModel):
     social_account_ids: list[int] | None = None
     target_content: list["ContentTargetInput"] | None = None
     scheduled_at: datetime | None = None
+    youtube: dict | None = None
+    facebook: dict | None = None
 
     @model_validator(mode="after")
     def validate_target_content(self):
@@ -108,6 +112,7 @@ class ContentTargetInput(BaseModel):
     post_type: Literal["video", "image", "text"] = "video"
     caption: str | None = None
     media_url: str | None = None
+    platform_settings: dict = Field(default_factory=dict)
 
 
 class ContentTargetResponse(BaseModel):
@@ -116,6 +121,7 @@ class ContentTargetResponse(BaseModel):
     post_type: Literal["video", "image", "text"] = "video"
     caption: str | None = None
     media_url: str | None = None
+    platform_settings: dict = Field(default_factory=dict)
     platform_post_id: str | None = None
     published_url: str | None = None
     status: str

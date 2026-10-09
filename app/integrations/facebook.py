@@ -120,9 +120,11 @@ class FacebookIntegration(SocialPlatform):
             "insights": data.get("data", []),
         }
 
-    async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
+    async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None, settings: dict | None = None) -> NormalizedVideo:
+        settings = settings or {}
+        description = settings.get("caption", description or "")
         page = await self.managed_page(access_token)
-        data = await self._request("POST", f"{self.graph_url}/{page['id']}/videos", data={"file_url": media_url, "title": title, "description": description or ""}, params={"access_token": page["access_token"]})
+        data = await self._request("POST", f"{self.graph_url}/{page['id']}/videos", data={"file_url": media_url, "title": title, "description": description}, params={"access_token": page["access_token"]})
         video_id = data.get("id")
         if not video_id:
             raise PlatformAPIError("Facebook upload response did not include a video ID")

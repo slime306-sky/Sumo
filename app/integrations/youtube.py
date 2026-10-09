@@ -48,16 +48,50 @@ class YouTubeIntegration(SocialPlatform):
             items.append(NormalizedVideo(item["id"], snippet.get("title"), snippet.get("description"), f"https://www.youtube.com/watch?v={item['id']}", snippet.get("thumbnails", {}).get("high", {}).get("url"), _parse_datetime(snippet.get("publishedAt")), _duration_seconds(content.get("duration")), _integer(stats.get("viewCount")), _integer(stats.get("likeCount")), _integer(stats.get("commentCount")), item))
         return VideoPage(items, search.get("nextPageToken"))
 
-    async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
+    async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None, settings: dict | None = None) -> NormalizedVideo:
+        settings = settings or {}
+        title = settings.get("title") or title
+        description = settings.get("description", description or "")
+        status = {
+            "privacyStatus": settings.get("privacy", settings.get("privacy_status", "private")),
+            "selfDeclaredMadeForKids": settings.get("madeForKids", False) in (True, "yes"),
+            "publicStatsViewable": settings.get("publicStats", True),
+            "embeddable": settings.get("embeddable", True),
+            "license": settings.get("license", settings.get("License", "standard")),
+        }
+        if settings.get("publishAt"):
+            status["publishAt"] = settings["publishAt"]
+            status["privacyStatus"] = "private"
+        if "aiDisclosure" in settings:
+            status["containsSyntheticMedia"] = bool(settings["aiDisclosure"])
+        snippet = {"title": title, "description": description, "categoryId": settings.get("categoryId", "22")}
+        tags = settings.get("tags")
+        if isinstance(tags, str):
+            tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        if tags:
+            snippet["tags"] = tags
+        language = settings.get("defaultLanguage", settings.get("language"))
+        if language:
+            snippet["defaultLanguage"] = language
+        if settings.get("defaultAudioLanguage"):
+            snippet["defaultAudioLanguage"] = settings["defaultAudioLanguage"]
+        recording_date = settings.get("recordingDate")
+        recording_details = {"recordingDate": recording_date} if recording_date else None
+        upload_params = {
+            "uploadType": "resumable",
+            "part": "snippet,status" + (",recordingDetails" if recording_details else ""),
+        }
+        if "notifySubscribers" in settings:
+            upload_params["notifySubscribers"] = str(bool(settings["notifySubscribers"])).lower()
         media = await self.client.get(media_url)
         if media.status_code >= 400:
             raise PlatformAPIError(f"YouTube media download returned HTTP {media.status_code}")
         content_type = media.headers.get("content-type", "video/mp4")
         response = await self.client.post(
             "https://www.googleapis.com/upload/youtube/v3/videos",
-            params={"uploadType": "resumable", "part": "snippet,status"},
+            params=upload_params,
             headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": content_type, "X-Upload-Content-Length": str(len(media.content))},
-            json={"snippet": {"title": title, "description": description or ""}, "status": {"privacyStatus": "private"}},
+            json={"snippet": snippet, "status": status, **({"recordingDetails": recording_details} if recording_details else {})},
         )
         if response.status_code >= 400:
             raise PlatformAPIError(f"YouTube upload session returned HTTP {response.status_code}")

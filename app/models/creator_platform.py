@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -42,6 +42,7 @@ class ContentItem(Base):
     creator_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     caption: Mapped[str | None] = mapped_column(Text)
     media_url: Mapped[str | None] = mapped_column(Text)
+    platform_settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False, index=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

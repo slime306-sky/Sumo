@@ -6,7 +6,9 @@ This document describes the API implemented by the current FastAPI backend. Path
 
 - Base path: `{{API_BASE_URL}}/api/v1`
 - Content type for JSON requests: `application/json`
-- Datetimes use ISO 8601. Scheduled content must include a timezone and be in the future.
+- Datetimes use ISO 8601. The application default timezone is `Asia/Kolkata`
+  (India Standard Time). Scheduled content without an offset is interpreted in
+  that timezone; offset-aware values are respected and stored safely.
 - Supported social platforms: `facebook`, `youtube`. Other platform names fail request validation with `422`.
 - Most creator/brand-owned endpoints require `Authorization: Bearer <access_token>`.
 - Public discovery routes do not require authentication.
@@ -175,6 +177,35 @@ curl -X POST "{{API_BASE_URL}}/api/v1/content/upload" \
 Use the returned `media_url` as `media_url` in `POST /content`, then call
 `POST /content/{content_id}/publish` to send the video to its selected
 YouTube and Facebook accounts. The default upload limit is 500 MB.
+
+### `POST /content/upload-and-publish`
+
+Uploads one video to Cloudinary, creates the content item, and publishes it
+to the selected connected accounts in one request. This avoids requiring the
+client to call `/content/upload` and then `/content/{content_id}/publish`
+separately.
+
+Send `multipart/form-data` with:
+
+| Field | Required | Description |
+|---|---|---|
+| `file` | Yes | Video file |
+| `social_account_ids` | Yes | JSON array such as `[1, 2]` |
+| `caption` | No | Caption/title sent to the platforms |
+| `scheduled_at` | No | ISO 8601 future datetime; if supplied, content is stored for later publishing |
+
+For immediate publishing, the response is the published `ContentResponse`.
+If `scheduled_at` is supplied, the response is a scheduled `ContentResponse`
+and publishing remains a separate scheduled operation.
+
+`POST /content` and the combined upload endpoint also accept optional
+platform-specific settings. The `youtube` object supports `title`,
+`description`, `privacy` (`private`, `unlisted`, or `public`), `publishAt`,
+`tags` (array or comma-separated string), `categoryId`, `language`,
+`notifySubscribers`, `madeForKids` (`yes` or `no`), `license`, `publicStats`,
+and `embeddable`. The `facebook` object supports `caption`; fields such as
+location, first comment, comment controls, and thumbnails are retained only
+for client compatibility until Meta provides equivalent publishing options.
 
 ## Social accounts
 
