@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0006_add_target_content_overrides"
+revision = "0006_target_overrides"
 down_revision = "0005_users"
 branch_labels = None
 depends_on = None
