@@ -651,11 +651,15 @@ Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `s
 
 ### `POST /content/{content_id}/publish`
 
-No request body. Returns `501 Not Implemented` for an owned content item because the current Facebook and YouTube integrations lack configured publishing permissions and upload implementations.
+No request body. Publishes the content media URL to every selected, active
+social account owned by the authenticated user. Facebook publishing discovers
+the first managed Page available to the connected Facebook account and uploads
+the public media URL as a Page video.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
-**Errors:** `404` content not found/owned; `501` publishing is not currently available.
+**Errors:** `400` content cannot be published or has no targets; `404` content
+not found/owned; `502` provider publishing failure.
 
 ## Analytics
 
@@ -805,6 +809,7 @@ Lists recorded metric snapshots for an account owned by the current user, ordere
 ## Current implementation limits
 
 - There is no background worker that dispatches scheduled content; scheduling currently persists calendar entries only.
-- `POST /content/{content_id}/publish` intentionally returns `501` until Facebook and YouTube write scopes and upload implementations are added.
+- Facebook publishing requires Meta credentials, a connected Page account with
+  `pages_manage_posts`, and a publicly reachable video URL.
 - Follower snapshots are manually posted; platform integrations do not currently retrieve audience size.
 - Bearer access tokens identify authenticated users.

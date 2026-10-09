@@ -55,6 +55,46 @@ subscribers gained/lost, traffic sources, geography, daily/monthly data,
 playback location, and age/gender. Reconnect YouTube accounts after enabling
 analytics so the OAuth consent includes the analytics read-only scope.
 
+### Publishing a video to a Facebook Page
+
+1. Create a Meta app at [Meta for Developers](https://developers.facebook.com/),
+   configure Facebook Login, and set the callback URL from `.env.example`.
+2. Set `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_CONFIG_ID`, and
+   `FACEBOOK_REDIRECT_URI` in `.env`. Keep the app secret out of source control.
+3. Ensure the app requests `pages_show_list`, `pages_manage_posts`, and
+   `pages_read_engagement`. During development, the Facebook user must be an
+   administrator/tester of the app and the Page. Production use may require
+   Meta App Review.
+4. Register and log in through the API, then open the URL returned by
+   `GET /api/v1/social/facebook/connect` while authenticated. Complete the
+   Facebook consent screen. The callback stores the connected Facebook account.
+5. Upload a publicly reachable video with `POST /api/v1/content/upload`, create
+   content using its `media_url` and the connected Facebook account ID, then
+   publish it:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/content/upload \
+  -H "Authorization: Bearer YOUR_SUMO_TOKEN" \
+  -F "file=@./video.mp4"
+
+curl -X POST http://localhost:8000/api/v1/content \
+  -H "Authorization: Bearer YOUR_SUMO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "caption": "My first Facebook Page video",
+    "media_url": "https://res.cloudinary.com/example/video/upload/video.mp4",
+    "social_account_ids": [31]
+  }'
+
+curl -X POST http://localhost:8000/api/v1/content/CONTENT_ID/publish \
+  -H "Authorization: Bearer YOUR_SUMO_TOKEN"
+```
+
+The Facebook integration discovers a managed Page from the connected account and
+uploads the public video URL to that Page. Cloudinary is already configured as
+the default video storage provider. This flow publishes videos; it does not
+publish to personal Facebook profiles.
+
 ## Creator and brand workflows
 
 Creator and brand profiles use the authenticated bearer-token identity. The API supports public creator discovery, brand campaigns, collaboration invitations and responses, content drafts, scheduled calendar entries, and analytics over synced video metrics.
