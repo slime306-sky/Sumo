@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0010_content_item_platform_settings"
+revision = "0010_content_settings"
 down_revision = "0009_add_platform_settings"
 branch_labels = None
 depends_on = None
