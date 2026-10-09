@@ -54,6 +54,18 @@ async def test_verify_permissions_reports_missing_grants():
 
 
 @pytest.mark.asyncio
+async def test_verify_permissions_explains_reconnect_for_partial_grants():
+    client = RecordingClient([FakeResponse({"data": [
+        {"permission": "public_profile", "status": "granted"},
+        {"permission": "pages_show_list", "status": "granted"},
+    ]})])
+    integration = FacebookIntegration(Settings(), client=client)
+
+    with pytest.raises(PlatformAPIError, match="Reconnect Facebook and approve all requested permissions"):
+        await integration.verify_permissions("user-token")
+
+
+@pytest.mark.asyncio
 async def test_managed_page_paginates_and_uses_page_token_for_publish():
     client = RecordingClient(
         [

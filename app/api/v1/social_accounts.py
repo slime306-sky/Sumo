@@ -42,7 +42,7 @@ async def oauth_callback(platform: Platform, code: str | None = Query(default=No
     try:
         return await SocialAccountService(db, settings).connect(user_id, platform, code)
     except SocialIntegrationError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Platform connection failed") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"{platform.value} connection failed: {exc}") from exc
 
 
 @router.get("/accounts", response_model=list[SocialAccountResponse])
