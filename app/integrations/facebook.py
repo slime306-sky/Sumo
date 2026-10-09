@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from app.integrations.base import NormalizedVideo, PlatformAPIError, ProfileData, SocialPlatform, TokenData, VideoPage, oauth_url
 from app.models.social_account import Platform
@@ -9,7 +10,17 @@ logger = logging.getLogger(__name__)
 
 class FacebookIntegration(SocialPlatform):
     platform = Platform.FACEBOOK
-    required_permissions = ("public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts")
+    required_permissions = ("public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts", "read_insights")
+    insight_metrics = (
+        "page_impressions",
+        "page_post_engagements",
+        "page_actions_post_reactions_total",
+        "page_fans",
+        "page_fan_adds",
+        "page_fan_removes",
+        "page_video_views",
+        "page_video_view_time",
+    )
 
     @property
     def graph_url(self) -> str:
@@ -85,6 +96,29 @@ class FacebookIntegration(SocialPlatform):
         data = await self._request("GET", f"{self.graph_url}/me/videos", params=params)
         items = [NormalizedVideo(item["id"], item.get("message"), item.get("description"), item.get("permalink_url"), _thumbnail(item), _parse_datetime(item.get("created_time")), None, item.get("views"), _summary(item.get("likes")), _summary(item.get("comments")), item) for item in data.get("data", [])]
         return VideoPage(items, (data.get("paging", {}).get("cursors") or {}).get("after"))
+
+    async def get_analytics(self, access_token: str, start_date: date, end_date: date) -> dict[str, Any]:
+        if start_date > end_date:
+            raise ValueError("Facebook analytics start date must be before or equal to end date")
+
+        page = await self.managed_page(access_token)
+        data = await self._request(
+            "GET",
+            f"{self.graph_url}/{page['id']}/insights",
+            params={
+                "metric": ",".join(self.insight_metrics),
+                "period": "day",
+                "since": start_date.isoformat(),
+                "until": end_date.isoformat(),
+                "access_token": page["access_token"],
+            },
+        )
+        return {
+            "page": {"id": page["id"], "name": page.get("name")},
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "insights": data.get("data", []),
+        }
 
     async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
         page = await self.managed_page(access_token)

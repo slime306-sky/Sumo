@@ -58,7 +58,7 @@ def decode_access_token(token: str) -> dict[str, str]:
         payload = json.loads(_decode_segment(encoded_payload))
         user_id = int(payload["sub"])
         role = payload["role"]
-        if role not in {"creator", "brand"} or int(payload["exp"]) <= int(time.time()):
+        if role not in {"creator", "brand", "company"} or int(payload["exp"]) <= int(time.time()):
             raise ValueError
     except (ValueError, TypeError, KeyError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired bearer token", headers={"WWW-Authenticate": "Bearer"})

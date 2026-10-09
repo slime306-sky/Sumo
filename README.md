@@ -39,14 +39,20 @@ GET /api/v1/social/accounts/{account_id}/videos
 POST /api/v1/social/accounts/{account_id}/sync
 ```
 
-Create a creator or brand account, then send the returned bearer token as `Authorization: Bearer <access_token>` on protected endpoints:
+Create a creator or company account through one of the dedicated registration
+routes, then send the returned bearer token as `Authorization: Bearer <access_token>` on protected endpoints:
 
 ```text
 POST /api/v1/auth/register
+POST /api/v1/auth/register/creator
+POST /api/v1/auth/register/company
 POST /api/v1/auth/login
 ```
 
-Registration requires a unique `login_id`, password, and `role` (`creator` or `brand`). Passwords are stored as PBKDF2 hashes, and access tokens are signed and expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`. Tokens are stored server-side and are never returned by API schemas or logged.
+The creator and company routes create the user and registration profile
+together. The legacy route still accepts a unique `login_id`, password, and
+role (`creator` or `brand`). Passwords are stored as PBKDF2 hashes, and access
+tokens are signed and expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`.
 
 YouTube sync handles API page tokens. Facebook sync handles Graph API cursors.
 YouTube analytics are available at
@@ -55,6 +61,11 @@ The response includes views, likes, comments, shares, watch time, retention,
 subscribers gained/lost, traffic sources, geography, daily/monthly data,
 playback location, and age/gender. Reconnect YouTube accounts after enabling
 analytics so the OAuth consent includes the analytics read-only scope.
+Facebook Page analytics are available at
+`GET /api/v1/analytics/accounts/{account_id}/facebook?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`.
+The endpoint returns daily Meta Page Insights for the first managed Page
+available to the connected Facebook account. Reconnect Facebook after enabling
+analytics so the OAuth consent includes `read_insights`.
 
 Content can use `target_content` on `POST /api/v1/content` or
 `PATCH /api/v1/content/{content_id}` to provide a different `post_type`,

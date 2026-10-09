@@ -33,8 +33,18 @@ redirects may remain registered for local development.
 
 ### Authentication
 
-`POST /auth/register` accepts `{ "login_id": "creator_1", "password": "a-strong-password", "role": "creator" }`.
-The role must be `creator` or `brand`. `POST /auth/login` accepts `login_id` and `password`.
+`POST /auth/register/creator` accepts the creator registration payload,
+including `email`, `fullName`, `cityState`, `creatorCategory`,
+`contentExperience`, `contentInterests`, `personalGoal`, `profilePic`, and
+`purposes`. `POST /auth/register/company` accepts the company registration
+payload, including `businessEmail`, `companyName`, `companySize`,
+`companyWebsite`, `companyDescription`, `companyLogo`, `cityState`, `country`,
+`industry`, `marketingGoal`, `creatorCategories`, `platforms`, `purposes`, and
+`additionalNotes`. Each route creates its profile in the same transaction as
+the user and returns the standard auth response.
+
+The legacy `POST /auth/register` route accepts `{ "login_id": "creator_1", "password": "a-strong-password", "role": "creator" }`.
+Its role remains `creator` or `brand`. `POST /auth/login` accepts `login_id` and `password`.
 Both endpoints return `user_id`, `role`, `access_token`, and `token_type: "bearer"`.
 Send the access token as `Authorization: Bearer <access_token>` to protected endpoints.
 Tokens are signed with `SECRET_KEY` and expire after `ACCESS_TOKEN_EXPIRE_MINUTES`.
@@ -878,29 +888,23 @@ the OAuth token includes the `yt-analytics.readonly` scope.
 
 ### Facebook Page analytics
 
-Facebook Page analytics are not currently exposed by an API endpoint. The
-existing Facebook connection stores the connected Facebook identity and
-supports the current account/video workflows, but it does not yet select a
-Facebook Page, obtain a Page Access Token, or call the Page Insights API.
-
-The planned endpoint is:
+Facebook Page analytics are exposed at:
 
 ```text
 GET /analytics/accounts/{account_id}/facebook
 ```
 
-The planned response will group supported Meta Page Insights by reach/views,
-post engagements, reactions, comments, shares, followers/follows/unfollows,
-video views and unique viewers, geography, language, daily/weekly/28-day
-periods, CTA clicks, post-level performance, and available audience
-demographics.
+Optional `start_date` and `end_date` ISO dates select the inclusive daily
+range. They default to the last 28 days ending today. The response includes
+the selected managed Page, the requested range, and the raw daily values for
+the supported Meta Page Insights metrics.
 
-Implementing this endpoint requires the Facebook OAuth flow to request
-`pages_show_list`, `pages_read_engagement`, and `read_insights`, then allow the
-creator to select a managed Page. The Meta app must include the Render
-hostname in **App Domains** and the exact HTTPS callback in **Valid OAuth
-Redirect URIs**. Some Page Insights metrics are version-dependent or
-deprecated and may be returned as empty or unavailable.
+The Facebook OAuth flow requests `pages_show_list`, `pages_read_engagement`,
+`pages_manage_posts`, and `read_insights`, then uses the first managed Page
+returned by Meta and its Page Access Token for the Insights request. Some Page
+Insights metrics are version-dependent or deprecated and may be returned as
+empty or unavailable. Reconnect existing Facebook accounts after enabling
+analytics so the stored token includes `read_insights`.
 
 ### `POST /analytics/accounts/{account_id}/snapshots`
 

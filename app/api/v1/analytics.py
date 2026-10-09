@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.integrations.youtube import YouTubeIntegration
+from app.integrations.facebook import FacebookIntegration
 from app.models.social_account import Platform
 from app.api.v1.social_accounts import current_user_id
 from app.schemas.creator_platform import MetricSnapshotCreate, MetricSnapshotResponse
@@ -24,6 +25,14 @@ def _youtube_date_range(start_date: date | None, end_date: date | None) -> tuple
         raise HTTPException(status_code=422, detail="start_date must be before or equal to end_date")
     if start < YOUTUBE_LAUNCH_DATE or end > latest_available_date:
         raise HTTPException(status_code=422, detail="YouTube dates must be between 2005-02-14 and yesterday")
+    return start, end
+
+
+def _facebook_date_range(start_date: date | None, end_date: date | None) -> tuple[date, date]:
+    end = end_date or date.today()
+    start = start_date or end - timedelta(days=28)
+    if start > end:
+        raise HTTPException(status_code=422, detail="start_date must be before or equal to end_date")
     return start, end
 
 
@@ -63,6 +72,23 @@ async def youtube_analytics(
     start, end = _youtube_date_range(start_date, end_date)
     token = await SocialAccountService(db, settings).valid_token(account)
     return await YouTubeIntegration(settings).get_analytics(token, start, end)
+
+
+@router.get("/accounts/{account_id}/facebook")
+async def facebook_analytics(
+    account_id: int,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(current_user_id),
+) -> dict:
+    settings = get_settings()
+    account = await SocialAccountService(db, settings).get_account(user_id, account_id)
+    if account is None or account.platform != Platform.FACEBOOK:
+        raise HTTPException(status_code=404, detail="Facebook account not found")
+    start, end = _facebook_date_range(start_date, end_date)
+    token = await SocialAccountService(db, settings).valid_token(account)
+    return await FacebookIntegration(settings).get_analytics(token, start, end)
 
 
 @router.post("/accounts/{account_id}/snapshots", response_model=MetricSnapshotResponse, status_code=status.HTTP_201_CREATED)
