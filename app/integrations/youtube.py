@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from datetime import date, timedelta
 from typing import Any
@@ -129,10 +130,14 @@ class YouTubeIntegration(SocialPlatform):
         summary = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost")
         daily = await self._report(access_token, common, "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost", "day")
         monthly = await self._report(access_token, monthly_range, "views,likes,comments,shares,estimatedMinutesWatched,subscribersGained,subscribersLost", "month")
-        traffic_sources = await self._report(access_token, common, "views,estimatedMinutesWatched", "insightTrafficSourceType")
-        geography = await self._report(access_token, common, "views,estimatedMinutesWatched", "country")
-        playback_location = await self._report(access_token, common, "views,estimatedMinutesWatched", "insightPlaybackLocationType")
-        age_gender = await self._report(access_token, common, "viewerPercentage", "ageGroup,gender")
+        traffic_sources = await self._optional_report(
+            access_token, common, "views,estimatedMinutesWatched", "insightTrafficSourceType"
+        )
+        geography = await self._optional_report(access_token, common, "views,estimatedMinutesWatched", "country")
+        playback_location = await self._optional_report(
+            access_token, common, "views,estimatedMinutesWatched", "insightPlaybackLocationType"
+        )
+        age_gender = await self._optional_report(access_token, common, "viewerPercentage", "ageGroup,gender")
         return {
             "start_date": start_date,
             "end_date": end_date,
@@ -144,6 +149,22 @@ class YouTubeIntegration(SocialPlatform):
             "playback_location": playback_location,
             "age_gender": age_gender,
         }
+
+    async def _optional_report(
+        self,
+        access_token: str,
+        common: dict[str, str],
+        metrics: str,
+        dimensions: str,
+    ) -> list[dict[str, Any]]:
+        try:
+            return await self._report(access_token, common, metrics, dimensions)
+        except PlatformAPIError as exc:
+            logger.warning(
+                "YouTube optional analytics report unavailable",
+                extra={"dimensions": dimensions, "error": str(exc)},
+            )
+            return []
 
     async def _report(self, access_token: str, common: dict[str, str], metrics: str, dimensions: str | None = None) -> list[dict[str, Any]]:
         params = {**common, "metrics": metrics}
@@ -178,3 +199,4 @@ def _duration_seconds(value: str | None) -> int | None:
             elif char == "S": seconds = int(number)
             number = ""
     return hours * 3600 + minutes * 60 + seconds
+logger = logging.getLogger(__name__)

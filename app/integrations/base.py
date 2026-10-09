@@ -147,11 +147,20 @@ class SocialPlatform(ABC):
             raise RateLimitError(f"{self.platform.value} rate limit reached")
         if response.status_code >= 400:
             detail = ""
+            reason = ""
             try:
                 error = response.json().get("error", {})
                 detail = error.get("message") or error.get("status") or ""
+                reasons = error.get("errors") or []
+                if reasons and isinstance(reasons[0], dict):
+                    reason = reasons[0].get("reason", "")
             except (ValueError, AttributeError):
                 pass
+            if reason in {"quotaExceeded", "dailyLimitExceeded", "userRateLimitExceeded", "rateLimitExceeded"}:
+                raise RateLimitError(
+                    f"{self.platform.value} API quota or rate limit reached"
+                    + (f": {detail}" if detail else "")
+                )
             suffix = f": {detail}" if detail else ""
             raise PlatformAPIError(f"{self.platform.value} API returned HTTP {response.status_code}{suffix}")
         try:
