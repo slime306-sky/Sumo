@@ -52,7 +52,7 @@ POST /api/v1/auth/me/profile-picture
 
 The creator and company routes create the user and registration profile
 together. The legacy route still accepts a unique `login_id`, password, and
-role (`creator` or `brand`). Passwords are stored as PBKDF2 hashes, and access
+role (`creator` or `company`). Passwords are stored as PBKDF2 hashes, and access
 tokens are signed and expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`.
 
 Profile pictures are uploaded as files directly to Cloudinary after creator
@@ -133,9 +133,9 @@ uploads the public video URL to that Page. Cloudinary is already configured as
 the default video storage provider. This flow publishes videos; it does not
 publish to personal Facebook profiles.
 
-## Creator and brand workflows
+## Creator and company workflows
 
-Creator and brand profiles use the authenticated bearer-token identity. The API supports public creator discovery, brand campaigns, collaboration invitations and responses, content drafts, scheduled calendar entries, and analytics over synced video metrics.
+Creator and company profiles use the authenticated bearer-token identity. The API supports public creator discovery, company campaigns, collaboration invitations and responses, content drafts, scheduled calendar entries, and analytics over synced video metrics.
 
 To associate a social account with a creator, call the existing `/api/v1/social/{platform}/connect` flow with the creator's bearer token. The OAuth callback stores the account under the signed OAuth state user ID, and creator profile/discovery responses include enabled connected accounts with public profile metadata only; access and refresh tokens are never included.
 
@@ -144,10 +144,10 @@ POST/PATCH/GET /api/v1/creators/me
 GET            /api/v1/creators/discover
 GET            /api/v1/creators/{creator_user_id}
 GET            /api/v1/analytics/creators/{creator_user_id}
-POST/PATCH/GET /api/v1/brands/me
-POST/GET       /api/v1/brands/me/campaigns
+POST/PATCH/GET /api/v1/companies/me
+POST/GET       /api/v1/companies/me/campaigns
 GET            /api/v1/campaigns
-POST/GET       /api/v1/brands/me/collaborations
+POST/GET       /api/v1/companies/me/collaborations
 GET/PATCH      /api/v1/creators/me/collaborations
 POST/GET       /api/v1/content
 POST            /api/v1/content/upload

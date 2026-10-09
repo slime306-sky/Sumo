@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
 from app.core.database import Base
-from app.models import AccountMetricSnapshot, BrandProfile, Campaign, CollaborationRequest, Company, ContentItem, ContentTarget, Creator, CreatorProfile, SocialAccount, SocialVideo, User
+from app.models import AccountMetricSnapshot, Campaign, CollaborationRequest, Company, ContentItem, ContentTarget, Creator, CreatorProfile, SocialAccount, SocialVideo, User
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))

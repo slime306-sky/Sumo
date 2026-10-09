@@ -1,4 +1,15 @@
 from app.schemas.auth import CompanyRegisterRequest, CreatorRegisterRequest
+from app.schemas.creator_platform import CampaignCreate, CollaborationCreate
+
+
+def test_campaign_requires_creator_payment_budget():
+    values = CampaignCreate.model_validate({"title": "Summer campaign", "budget": 1000})
+    assert values.budget == 1000
+
+
+def test_collaboration_request_requires_campaign():
+    values = CollaborationCreate.model_validate({"creator_user_id": 22, "campaign_id": 8})
+    assert values.campaign_id == 8
 
 
 def test_company_registration_accepts_legacy_payload_fallbacks():

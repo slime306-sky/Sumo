@@ -2,11 +2,10 @@ from app.models.social_account import SocialAccount
 from app.models.social_video import SocialVideo
 from app.models.user import User
 from app.models.registration_profile import Company, Creator
-from app.models.creator_platform import AccountMetricSnapshot, BrandProfile, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
+from app.models.creator_platform import AccountMetricSnapshot, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
 
 __all__ = [
 	"AccountMetricSnapshot",
-	"BrandProfile",
 	"Campaign",
 	"CollaborationRequest",
 	"ContentItem",

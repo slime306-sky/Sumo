@@ -46,7 +46,7 @@ payload, including `businessEmail`, `companyName`, `companySize`,
 the user and returns the standard auth response.
 
 The legacy `POST /auth/register` route accepts `{ "login_id": "creator_1", "password": "a-strong-password", "role": "creator" }`.
-Its role remains `creator` or `brand`. `POST /auth/login` accepts `login_id` and `password`.
+Its role is `creator` or `company`. `POST /auth/login` accepts `login_id` and `password`.
 Both endpoints return `user_id`, `role`, `access_token`, and `token_type: "bearer"`.
 Send the access token as `Authorization: Bearer <access_token>` to protected endpoints.
 Tokens are signed with `SECRET_KEY` and expire after `ACCESS_TOKEN_EXPIRE_MINUTES`.
@@ -456,15 +456,15 @@ Returns one public creator profile by owner ID.
 
 **Errors:** `404` if no public profile exists for that user ID.
 
-## Brand profiles
+## Company profiles
 
-### Brand profile fields
+### Company profile fields
 
-`BrandProfileResponse` contains `id`, `user_id`, `company_name`, `description`, `website`, `industry`, `logo_url`, and `created_at`.
+`CompanyProfileResponse` contains `id`, `user_id`, `company_name`, `description`, `website`, `industry`, `logo_url`, and `created_at`.
 
-### `POST /brands/me`
+### `POST /companies/me`
 
-Creates or updates the current user's brand profile (upsert behavior).
+Creates or updates the current user's company profile (upsert behavior).
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -474,29 +474,29 @@ Creates or updates the current user's brand profile (upsert behavior).
 {
   "company_name": "Northstar Foods",
   "description": "A packaged food company",
-  "website": "https://brand.example",
+  "website": "https://company.example",
   "industry": "Food",
-  "logo_url": "https://brand.example/logo.png"
+  "logo_url": "https://company.example/logo.png"
 }
 ```
 
 `company_name` is required; all other fields are optional.
 
-**201 response:** `BrandProfileResponse`.
+**201 response:** `CompanyProfileResponse`.
 
-### `GET /brands/me`
+### `GET /companies/me`
 
-Returns the current user's brand profile.
+Returns the current user's company profile.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
-**200 response:** `BrandProfileResponse`.
+**200 response:** `CompanyProfileResponse`.
 
-**Errors:** `404` brand profile not found.
+**Errors:** `404` company profile not found.
 
-### `PATCH /brands/me`
+### `PATCH /companies/me`
 
-Updates an existing brand profile; fields are optional.
+Updates an existing company profile; fields are optional.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -506,19 +506,19 @@ Updates an existing brand profile; fields are optional.
 {"description": "Updated company description", "industry": "Food and beverage"}
 ```
 
-**200 response:** updated `BrandProfileResponse`.
+**200 response:** updated `CompanyProfileResponse`.
 
-**Errors:** `404` brand profile not found; `422` invalid field values.
+**Errors:** `404` company profile not found; `422` invalid field values.
 
 ## Campaigns and collaborations
 
 ### Campaign fields
 
-`CampaignResponse` contains `id`, `brand_user_id`, `title`, `description`, `requirements`, `budget`, `starts_at`, `ends_at`, `status`, and `created_at`. Budget is a non-negative decimal or `null`. Campaign statuses accepted on update are `draft`, `open`, `active`, `completed`, and `cancelled`; newly created campaigns start as `open`.
+`CampaignResponse` contains `id`, `company_user_id`, `title`, `description`, `requirements`, `budget`, `starts_at`, `ends_at`, `status`, and `created_at`. `budget` is required and is the amount the company will pay one creator for the campaign. Campaign statuses accepted on update are `draft`, `open`, `active`, `completed`, and `cancelled`; newly created campaigns start as `open`.
 
-### `POST /brands/me/campaigns`
+### `POST /companies/me/campaigns`
 
-Creates a campaign. The current user must have a brand profile.
+Creates a campaign. The current user must have a company profile.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -535,21 +535,21 @@ Creates a campaign. The current user must have a brand profile.
 }
 ```
 
-Only `title` is required. `ends_at` cannot precede `starts_at`.
+`title` and `budget` are required. The budget is the payment offered to each creator. `ends_at` cannot precede `starts_at`.
 
 **201 response:** `CampaignResponse` with `status: "open"`.
 
-**Errors:** `400` brand profile is missing or campaign dates are invalid; `422` invalid body.
+**Errors:** `400` company profile is missing or campaign dates are invalid; `422` invalid body.
 
-### `GET /brands/me/campaigns`
+### `GET /companies/me/campaigns`
 
-Lists campaigns owned by the current brand.
+Lists campaigns owned by the current company.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `CampaignResponse` objects.
 
-### `PATCH /brands/me/campaigns/{campaign_id}`
+### `PATCH /companies/me/campaigns/{campaign_id}`
 
 Updates an owned campaign. All request fields are optional.
 
@@ -563,7 +563,7 @@ Updates an owned campaign. All request fields are optional.
 
 **200 response:** updated `CampaignResponse`.
 
-**Errors:** `400` brand profile missing or invalid dates; `404` campaign not found/owned; `422` invalid field values.
+**Errors:** `400` company profile missing or invalid dates; `404` campaign not found/owned; `422` invalid field values.
 
 ### `GET /campaigns`
 
@@ -571,9 +571,9 @@ Lists campaigns whose status is `open`; this route is public.
 
 **200 response:** array of `CampaignResponse` objects.
 
-### `POST /brands/me/collaborations`
+### `POST /companies/me/collaborations`
 
-Sends an invitation to a public creator, optionally tied to a campaign owned by the brand.
+Sends an invitation to a public creator, optionally tied to a campaign owned by the company.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -587,27 +587,28 @@ Sends an invitation to a public creator, optionally tied to a campaign owned by 
 }
 ```
 
-`creator_user_id` is required; `campaign_id` and `message` are optional.
+`creator_user_id` and `campaign_id` are required. The campaign must belong to the company and have a budget before an invitation can be sent. The invitation response includes the budget offered to the creator.
 
 **201 response: `CollaborationResponse`**
 
 ```json
 {
   "id": 41,
-  "brand_user_id": 33,
+  "company_user_id": 33,
   "creator_user_id": 22,
   "campaign_id": 8,
+  "budget": "1000.00",
   "message": "We'd like to collaborate on our summer launch.",
   "status": "pending",
   "created_at": "2026-10-08T12:00:00Z"
 }
 ```
 
-**Errors:** `400` no brand profile, creator is not public/not found, or campaign is not owned by the brand; `422` invalid body.
+**Errors:** `400` no company profile, creator is not public/not found, or campaign is not owned by the company; `422` invalid body.
 
-### `GET /brands/me/collaborations`
+### `GET /companies/me/collaborations`
 
-Lists requests sent by the current brand.
+Lists requests sent by the current company.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -639,7 +640,7 @@ Allowed values: `accepted`, `declined`.
 
 **Errors:** `404` request not found/owned; `409` request is not pending; `422` invalid status.
 
-### `PATCH /brands/me/collaborations/{request_id}`
+### `PATCH /companies/me/collaborations/{request_id}`
 
 Updates progress on an accepted request.
 

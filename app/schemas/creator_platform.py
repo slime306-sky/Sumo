@@ -40,28 +40,32 @@ class CreatorProfileResponse(CreatorProfileCreate):
     social_accounts: list[CreatorSocialAccountResponse] = Field(default_factory=list)
 
 
-class BrandProfileCreate(BaseModel):
-    company_name: str = Field(min_length=1, max_length=255)
+class CompanyProfileCreate(BaseModel):
+    company_name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     website: str | None = None
-    industry: str | None = Field(default=None, max_length=120)
+    industry: str | None = Field(default=None, max_length=100)
     logo_url: str | None = None
 
 
-class BrandProfileUpdate(BaseModel):
-    company_name: str | None = Field(default=None, min_length=1, max_length=255)
+class CompanyProfileUpdate(BaseModel):
+    company_name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
     website: str | None = None
-    industry: str | None = Field(default=None, max_length=120)
+    industry: str | None = Field(default=None, max_length=100)
     logo_url: str | None = None
 
 
-class BrandProfileResponse(BrandProfileCreate):
+class CompanyProfileResponse(CompanyProfileCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     user_id: int
     created_at: datetime
+
+    description: str | None = Field(default=None, validation_alias="company_description", serialization_alias="description")
+    website: str | None = Field(default=None, validation_alias="company_website", serialization_alias="website")
+    logo_url: str | None = Field(default=None, validation_alias="company_logo", serialization_alias="logo_url")
 
 
 class ContentCreate(BaseModel):
@@ -153,7 +157,7 @@ class CampaignCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     requirements: str | None = None
-    budget: Decimal | None = Field(default=None, ge=0)
+    budget: Decimal = Field(ge=0)
     starts_at: datetime | None = None
     ends_at: datetime | None = None
 
@@ -178,14 +182,15 @@ class CampaignResponse(CampaignCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    brand_user_id: int
+    company_user_id: int
+    budget: Decimal | None = None
     status: str
     created_at: datetime
 
 
 class CollaborationCreate(BaseModel):
     creator_user_id: int
-    campaign_id: int | None = None
+    campaign_id: int
     message: str | None = None
 
 
@@ -193,9 +198,10 @@ class CollaborationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    brand_user_id: int
+    company_user_id: int
     creator_user_id: int
     campaign_id: int | None = None
+    budget: Decimal | None = None
     message: str | None = None
     status: str
     created_at: datetime

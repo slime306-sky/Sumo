@@ -21,20 +21,6 @@ class CreatorProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class BrandProfile(Base):
-    __tablename__ = "brand_profiles"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True, index=True)
-    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    website: Mapped[str | None] = mapped_column(Text)
-    industry: Mapped[str | None] = mapped_column(String(120))
-    logo_url: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-
 class ContentItem(Base):
     __tablename__ = "content_items"
 
@@ -70,7 +56,7 @@ class Campaign(Base):
     __tablename__ = "campaigns"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    brand_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    company_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     requirements: Mapped[str | None] = mapped_column(Text)
@@ -86,9 +72,10 @@ class CollaborationRequest(Base):
     __tablename__ = "collaboration_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    brand_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    company_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     creator_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id", ondelete="SET NULL"), index=True)
+    budget: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     message: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

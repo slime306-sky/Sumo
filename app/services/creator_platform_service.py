@@ -7,10 +7,11 @@ from app.core.config import Settings
 from app.core.time import assume_india_timezone, now_utc
 from app.integrations.base import PlatformAPIError, SocialIntegrationError
 from app.integrations.registry import get_integration
-from app.models.creator_platform import AccountMetricSnapshot, BrandProfile, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
+from app.models.creator_platform import AccountMetricSnapshot, Campaign, CollaborationRequest, ContentItem, ContentTarget, CreatorProfile
+from app.models.registration_profile import Company
 from app.models.social_account import SocialAccount
 from app.models.social_video import SocialVideo
-from app.schemas.creator_platform import BrandProfileCreate, BrandProfileUpdate, CampaignCreate, CampaignUpdate, CollaborationCreate, ContentCreate, ContentUpdate, CreatorProfileCreate, CreatorProfileUpdate, MetricSnapshotCreate
+from app.schemas.creator_platform import CampaignCreate, CampaignUpdate, CollaborationCreate, CompanyProfileCreate, CompanyProfileUpdate, ContentCreate, ContentUpdate, CreatorProfileCreate, CreatorProfileUpdate, MetricSnapshotCreate
 from app.services.platform_service import PlatformService
 
 
@@ -77,15 +78,25 @@ class CreatorPlatformService:
         profile = result.scalar_one_or_none()
         return await self.creator_profile_data(profile) if profile is not None else None
 
-    async def brand_profile(self, user_id: int) -> BrandProfile | None:
-        result = await self.db.execute(select(BrandProfile).where(BrandProfile.user_id == user_id))
+    async def company_profile(self, user_id: int) -> Company | None:
+        result = await self.db.execute(select(Company).where(Company.user_id == user_id))
         return result.scalar_one_or_none()
 
-    async def save_brand_profile(self, user_id: int, values: BrandProfileCreate | BrandProfileUpdate) -> BrandProfile:
-        profile = await self.brand_profile(user_id)
+    async def save_company_profile(self, user_id: int, values: CompanyProfileCreate | CompanyProfileUpdate) -> Company:
+        profile = await self.company_profile(user_id)
         data = values.model_dump(exclude_unset=True)
+        data = {
+            "company_name": data.get("company_name"),
+            "company_description": data.get("description"),
+            "company_website": data.get("website"),
+            "industry": data.get("industry"),
+            "company_logo": data.get("logo_url"),
+        }
+        data = {key: value for key, value in data.items() if value is not None}
         if profile is None:
-            profile = BrandProfile(user_id=user_id, **data)
+            if "company_name" not in data:
+                raise ValueError("Company name is required")
+            profile = Company(user_id=user_id, **data)
             self.db.add(profile)
         else:
             for key, value in data.items():
@@ -324,11 +335,11 @@ class CreatorPlatformService:
         return [await self._content_response(item) for item in result.scalars().all()]
 
     async def save_campaign(self, user_id: int, values: CampaignCreate | CampaignUpdate, campaign_id: int | None = None) -> Campaign | None:
-        if await self.brand_profile(user_id) is None:
-            raise ValueError("Create a brand profile before managing campaigns")
+        if await self.company_profile(user_id) is None:
+            raise ValueError("Create a company profile before managing campaigns")
         campaign = None
         if campaign_id is not None:
-            result = await self.db.execute(select(Campaign).where(Campaign.id == campaign_id, Campaign.brand_user_id == user_id))
+            result = await self.db.execute(select(Campaign).where(Campaign.id == campaign_id, Campaign.company_user_id == user_id))
             campaign = result.scalar_one_or_none()
             if campaign is None:
                 return None
@@ -338,7 +349,7 @@ class CreatorPlatformService:
         if starts_at and ends_at and ends_at < starts_at:
             raise ValueError("Campaign end must be after its start")
         if campaign is None:
-            campaign = Campaign(brand_user_id=user_id, **data)
+            campaign = Campaign(company_user_id=user_id, **data)
             self.db.add(campaign)
         else:
             for key, value in data.items():
@@ -350,35 +361,48 @@ class CreatorPlatformService:
     async def list_campaigns(self, user_id: int | None = None, open_only: bool = False) -> list[Campaign]:
         query = select(Campaign).order_by(Campaign.created_at.desc())
         if user_id is not None:
-            query = query.where(Campaign.brand_user_id == user_id)
+            query = query.where(Campaign.company_user_id == user_id)
         elif open_only:
             query = query.where(Campaign.status == "open")
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def create_collaboration(self, brand_user_id: int, values: CollaborationCreate) -> CollaborationRequest:
-        if await self.brand_profile(brand_user_id) is None:
-            raise ValueError("Create a brand profile before inviting creators")
+    async def create_collaboration(self, company_user_id: int, values: CollaborationCreate) -> CollaborationRequest:
+        if await self.company_profile(company_user_id) is None:
+            raise ValueError("Create a company profile before inviting creators")
         creator_result = await self.db.execute(select(CreatorProfile).where(CreatorProfile.user_id == values.creator_user_id, CreatorProfile.is_public.is_(True)))
         if creator_result.scalar_one_or_none() is None:
             raise ValueError("Public creator profile not found")
-        if values.campaign_id is not None:
-            campaign_result = await self.db.execute(select(Campaign).where(Campaign.id == values.campaign_id, Campaign.brand_user_id == brand_user_id))
-            if campaign_result.scalar_one_or_none() is None:
-                raise ValueError("Campaign not found")
-        request = CollaborationRequest(brand_user_id=brand_user_id, creator_user_id=values.creator_user_id, campaign_id=values.campaign_id, message=values.message)
+        campaign_result = await self.db.execute(
+            select(Campaign).where(
+                Campaign.id == values.campaign_id,
+                Campaign.company_user_id == company_user_id,
+            )
+        )
+        campaign = campaign_result.scalar_one_or_none()
+        if campaign is None:
+            raise ValueError("Campaign not found")
+        if campaign.budget is None:
+            raise ValueError("Set a budget on the campaign before inviting a creator")
+        request = CollaborationRequest(
+            company_user_id=company_user_id,
+            creator_user_id=values.creator_user_id,
+            campaign_id=campaign.id,
+            budget=campaign.budget,
+            message=values.message,
+        )
         self.db.add(request)
         await self.db.commit()
         await self.db.refresh(request)
         return request
 
     async def list_collaborations(self, user_id: int, as_creator: bool) -> list[CollaborationRequest]:
-        column = CollaborationRequest.creator_user_id if as_creator else CollaborationRequest.brand_user_id
+        column = CollaborationRequest.creator_user_id if as_creator else CollaborationRequest.company_user_id
         result = await self.db.execute(select(CollaborationRequest).where(column == user_id).order_by(CollaborationRequest.created_at.desc()))
         return list(result.scalars().all())
 
     async def update_collaboration(self, user_id: int, request_id: int, status: str, as_creator: bool) -> CollaborationRequest | None:
-        column = CollaborationRequest.creator_user_id if as_creator else CollaborationRequest.brand_user_id
+        column = CollaborationRequest.creator_user_id if as_creator else CollaborationRequest.company_user_id
         result = await self.db.execute(select(CollaborationRequest).where(CollaborationRequest.id == request_id, column == user_id))
         request = result.scalar_one_or_none()
         if request is None:
