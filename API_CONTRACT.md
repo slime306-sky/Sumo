@@ -64,6 +64,60 @@ Application errors generally return:
 
 Provider rate limits return `429`; provider integration errors return `502`.
 
+## Facebook Page publishing setup
+
+Facebook publishing uses the Meta Graph API and publishes videos to a
+Facebook **Page**, not to a personal profile. The application uses the
+Facebook OAuth flow to connect a user account, then discovers a managed Page
+when content is published.
+
+### Required environment variables
+
+Configure these variables in `.env` for local development or in the deployed
+service environment:
+
+```env
+FACEBOOK_APP_ID=your-meta-app-id
+FACEBOOK_APP_SECRET=your-meta-app-secret
+FACEBOOK_CONFIG_ID=your-facebook-login-configuration-id
+FACEBOOK_REDIRECT_URI=http://localhost:8000/api/v1/social/facebook/callback
+```
+
+`FACEBOOK_APP_SECRET` must remain server-side and must not be committed to the
+repository or returned by an API response. The redirect URI registered in Meta
+for Developers must exactly match `FACEBOOK_REDIRECT_URI`.
+
+### Required Meta configuration
+
+Create an application in [Meta for Developers](https://developers.facebook.com/)
+and configure Facebook Login. The Facebook connection requests these scopes:
+
+- `pages_show_list`: discover Pages managed by the user.
+- `pages_manage_posts`: publish videos to a managed Page.
+- `pages_read_engagement`: read Page content and engagement data used by sync.
+
+While the Meta app is in development mode, the Facebook user must be an app
+administrator, developer, or tester and must have access to the target Page.
+Production use with other users may require Meta App Review and business
+verification.
+
+### Publishing requirements
+
+- The connected social account must be a Facebook account with at least one
+  managed Page.
+- The selected content must have a public, HTTPS-reachable `media_url`.
+- The media URL must resolve to a video that Facebook can download.
+- The content must target the connected Facebook account ID.
+- Publishing is performed by `POST /content/{content_id}/publish`; there is no
+  background scheduler that automatically publishes a future `scheduled_at`
+  value.
+
+The integration requests `GET /me/accounts` using the connected user token,
+selects the first returned Page with an ID and Page access token, then sends
+the video to `POST /{page_id}/videos` with `file_url`, `title`, and
+`description`. The Page access token is never returned in an API response or
+written to logs.
+
 ## Health
 
 ### `GET /health`
@@ -167,6 +221,10 @@ by the authenticated `/connect` request.
 `access_token` and `refresh_token` are deliberately omitted.
 
 **Errors:** `400` invalid OAuth state; `404` temporarily disabled platform; `422` unsupported platform; `502` provider connection failure.
+
+For Facebook, a successful callback stores the connected user account. The
+Page itself is resolved during publishing, so the connection response does not
+contain a separate Page access token or Page selection field.
 
 ### `GET /social/accounts`
 
@@ -617,7 +675,9 @@ Lists the current user's items with `status: "published"`.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
-**200 response:** array of `ContentResponse` objects. The current provider integrations do not publish content, so no item is marked published by the publish endpoint yet.
+**200 response:** array of `ContentResponse` objects. A successfully
+published item has `status: "published"` and each successful target contains
+its provider `platform_post_id` and `published_url`.
 
 ### `GET /content/{content_id}`
 
@@ -658,8 +718,33 @@ the public media URL as a Page video.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
+**200 response: `ContentResponse`**. A successful Facebook target includes its
+provider post ID and published URL, for example:
+
+```json
+{
+  "id": 70,
+  "status": "published",
+  "published_at": "2026-10-09T05:40:00Z",
+  "targets": [
+    {
+      "social_account_id": 31,
+      "platform_post_id": "123456789012345",
+      "published_url": "https://www.facebook.com/123456789012345",
+      "status": "published"
+    }
+  ]
+}
+```
+
+If one of several targets fails, successful targets remain recorded, failed
+targets are marked `failed`, the content is marked `failed`, and the endpoint
+returns `502`.
+
 **Errors:** `400` content cannot be published or has no targets; `404` content
-not found/owned; `502` provider publishing failure.
+not found/owned; `502` provider publishing failure. Facebook-specific
+failures include no managed Page, missing `pages_manage_posts` permission, an
+expired or invalid token, or a media URL that Facebook cannot fetch.
 
 ## Analytics
 
