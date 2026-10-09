@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     facebook_app_secret: str | None = None
     facebook_config_id: str | None = None
     facebook_redirect_uri: str | None = None
+    facebook_graph_api_version: str = "v23.0"
     youtube_client_id: str | None = None
     youtube_client_secret: str | None = None
     youtube_redirect_uri: str | None = None

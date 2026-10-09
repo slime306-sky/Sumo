@@ -69,13 +69,19 @@ without an override uses the top-level `media_url` and caption.
    configure Facebook Login, and set the callback URL from `.env.example`.
 2. Set `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_CONFIG_ID`, and
    `FACEBOOK_REDIRECT_URI` in `.env`. Keep the app secret out of source control.
-3. Ensure the app requests `pages_show_list`, `pages_manage_posts`, and
+3. Ensure the Facebook Login configuration has these permissions available:
+   `public_profile`, `pages_show_list`, `pages_manage_posts`, and
    `pages_read_engagement`. During development, the Facebook user must be an
-   administrator/tester of the app and the Page. Production use may require
-   Meta App Review.
+   administrator, developer, or tester of the app and must have sufficient
+   access to the Page. Production use may require Meta App Review and business
+   verification. Dashboard configuration alone does not grant permissions to
+   an existing User Access Token.
 4. Register and log in through the API, then open the URL returned by
    `GET /api/v1/social/facebook/connect` while authenticated. Complete the
-   Facebook consent screen. The callback stores the connected Facebook account.
+   Facebook consent screen and approve all requested permissions. The callback
+   verifies the granted permissions before storing the connected Facebook
+   account. If permissions were changed, use the connect URL again to perform
+   a fresh reconnect.
 5. Upload a publicly reachable video with `POST /api/v1/content/upload`, create
    content using its `media_url` and the connected Facebook account ID, then
    publish it:

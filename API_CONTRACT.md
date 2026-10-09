@@ -81,6 +81,7 @@ FACEBOOK_APP_ID=your-meta-app-id
 FACEBOOK_APP_SECRET=your-meta-app-secret
 FACEBOOK_CONFIG_ID=your-facebook-login-configuration-id
 FACEBOOK_REDIRECT_URI=http://localhost:8000/api/v1/social/facebook/callback
+FACEBOOK_GRAPH_API_VERSION=v23.0
 ```
 
 `FACEBOOK_APP_SECRET` must remain server-side and must not be committed to the
@@ -97,7 +98,11 @@ and configure Facebook Login. The Facebook connection requests these scopes:
 - `pages_read_engagement`: read Page content and engagement data used by sync.
 
 While the Meta app is in development mode, the Facebook user must be an app
-administrator, developer, or tester and must have access to the target Page.
+administrator, developer, or tester and must have sufficient access to the
+target Page. Adding permissions in the Meta dashboard does not retroactively
+add them to an existing User Access Token; reconnect and approve the requested
+permissions. SUMO verifies the granted permissions during the OAuth callback
+and reports any missing permission names.
 Production use with other users may require Meta App Review and business
 verification.
 

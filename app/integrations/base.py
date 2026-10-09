@@ -88,6 +88,9 @@ class SocialPlatform(ABC):
     async def refresh_access_token(self, refresh_token: str) -> TokenData:
         raise OAuthError(f"{self.platform.value} does not support token refresh")
 
+    async def verify_permissions(self, access_token: str) -> None:
+        return None
+
     @abstractmethod
     async def get_profile(self, access_token: str) -> ProfileData:
         raise NotImplementedError

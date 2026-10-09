@@ -25,6 +25,7 @@ class SocialAccountService:
         PlatformService(self.settings).require_enabled(platform)
         integration = get_integration(platform, self.settings)
         token = await integration.exchange_code_for_token(code)
+        await integration.verify_permissions(token.access_token)
         profile = await integration.get_profile(token.access_token)
         result = await self.db.execute(select(SocialAccount).where(SocialAccount.user_id == user_id, SocialAccount.platform == platform, SocialAccount.platform_user_id == profile.platform_user_id))
         account = result.scalar_one_or_none()

@@ -29,8 +29,13 @@ async def connect_platform(platform: Platform, user_id: int = Depends(current_us
 
 
 @router.get("/{platform}/callback", response_model=SocialAccountResponse)
-async def oauth_callback(platform: Platform, code: str = Query(...), state: str = Query(...), db: AsyncSession = Depends(get_db), settings: Settings = Depends(get_settings)) -> SocialAccountResponse:
+async def oauth_callback(platform: Platform, code: str | None = Query(default=None), state: str | None = Query(default=None), error: str | None = Query(default=None), error_description: str | None = Query(default=None), db: AsyncSession = Depends(get_db), settings: Settings = Depends(get_settings)) -> SocialAccountResponse:
     require_enabled_platform(platform, settings)
+    if error:
+        detail = error_description or error
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{platform.value} authorization was not completed: {detail}")
+    if not code or not state:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth callback requires code and state")
     user_id = validate_oauth_state(state, platform.value)
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
