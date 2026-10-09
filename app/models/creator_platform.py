@@ -60,6 +60,7 @@ class ContentTarget(Base):
     post_type: Mapped[str] = mapped_column(String(16), default="video", nullable=False)
     caption: Mapped[str | None] = mapped_column(Text)
     media_url: Mapped[str | None] = mapped_column(Text)
+    platform_settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     platform_post_id: Mapped[str | None] = mapped_column(String(255))
     published_url: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)

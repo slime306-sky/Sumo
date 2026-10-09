@@ -54,6 +54,33 @@ class CompanyRegisterRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_company_payload(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+
+        normalized = values.copy()
+        aliases = {
+            "businessEmail": ("email", "login_id"),
+            "companyName": ("company_name",),
+            "companySize": ("company_size",),
+            "companyWebsite": ("website", "company_website"),
+            "companyDescription": ("description", "company_description"),
+            "companyLogo": ("logo_url", "company_logo"),
+            "cityState": ("city_state",),
+            "marketingGoal": ("marketing_goal",),
+            "creatorCategories": ("creator_categories",),
+            "additionalNotes": ("additional_notes",),
+        }
+        for canonical, fallback_names in aliases.items():
+            if not normalized.get(canonical):
+                for fallback_name in fallback_names:
+                    if normalized.get(fallback_name):
+                        normalized[canonical] = normalized[fallback_name]
+                        break
+        return normalized
+
 
 class RegisterRequest(BaseModel):
     login_id: str = Field(min_length=3, max_length=120, pattern=r"^[A-Za-z0-9_.-]+$")
