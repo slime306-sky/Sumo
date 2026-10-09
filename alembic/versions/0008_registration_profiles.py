@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0008_registration_profiles"
-down_revision = "0007_add_content_target_post_type"
+down_revision = "0007_post_type"
 branch_labels = None
 depends_on = None
 
