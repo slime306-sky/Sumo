@@ -1,6 +1,6 @@
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 Role = Literal["creator", "brand", "company"]
@@ -18,9 +18,21 @@ class CreatorRegisterRequest(BaseModel):
     content_experience: str | None = Field(default=None, alias="contentExperience", max_length=100)
     content_interests: list[str] = Field(default_factory=list, alias="contentInterests")
     personal_goal: str | None = Field(default=None, alias="personalGoal")
+    # JSON clients may send the browser's serialized file/preview metadata.
+    # Actual image uploads are handled by the multipart endpoint.
+    profile_pic: dict[str, Any] | str | None = Field(default=None, alias="profilePic")
     purposes: list[str] = Field(default_factory=list)
 
     model_config = {"extra": "forbid", "populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_goal_name(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "personaGoal" in values:
+            values = values.copy()
+            values.setdefault("personalGoal", values["personaGoal"])
+            values.pop("personaGoal")
+        return values
 
 
 class CompanyRegisterRequest(BaseModel):

@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +68,10 @@ async def register_creator(
             raise HTTPException(status_code=422, detail="profilePic must be an image file")
         profile_file = uploaded_file
     else:
-        values = CreatorRegisterRequest.model_validate(await request.json())
+        try:
+            values = CreatorRegisterRequest.model_validate(await request.json())
+        except ValidationError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.errors()) from exc
 
     if await _registered_email(values.email, db) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered")
