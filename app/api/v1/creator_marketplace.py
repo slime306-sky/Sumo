@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.api.v1.social_accounts import current_user_id
-from app.schemas.creator_platform import CampaignCreate, CampaignResponse, CampaignUpdate, CollaborationCreate, CollaborationDecision, CollaborationProgress, CollaborationResponse, CompanyProfileCreate, CompanyProfileResponse, CompanyProfileUpdate, CreatorProfileCreate, CreatorProfileResponse, CreatorProfileUpdate
+from app.schemas.creator_platform import CampaignCreate, CampaignDetailResponse, CampaignResponse, CampaignUpdate, CollaborationCreate, CollaborationDecision, CollaborationProgress, CollaborationResponse, CompanyProfileCreate, CompanyProfileResponse, CompanyProfileUpdate, CreatorProfileCreate, CreatorProfileResponse, CreatorProfileUpdate
 from app.services.creator_platform_service import CreatorPlatformService
 
 router = APIRouter(tags=["creator and company marketplace"])
@@ -81,6 +81,22 @@ async def create_campaign(values: CampaignCreate, db: AsyncSession = Depends(get
 @router.get("/companies/me/campaigns", response_model=list[CampaignResponse])
 async def company_campaigns(db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> list[CampaignResponse]:
     return await CreatorPlatformService(db, get_settings()).list_campaigns(user_id=user_id)
+
+
+@router.get("/companies/me/campaigns/{campaign_id}", response_model=CampaignDetailResponse)
+async def company_campaign_detail(campaign_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> CampaignDetailResponse:
+    detail = await CreatorPlatformService(db, get_settings()).campaign_details(campaign_id, user_id, as_company=True)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return detail
+
+
+@router.get("/creators/me/campaigns/{campaign_id}", response_model=CampaignDetailResponse)
+async def creator_campaign_detail(campaign_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> CampaignDetailResponse:
+    detail = await CreatorPlatformService(db, get_settings()).campaign_details(campaign_id, user_id, as_company=False)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Campaign not found or not associated with the creator")
+    return detail
 
 
 @router.patch("/companies/me/campaigns/{campaign_id}", response_model=CampaignResponse)

@@ -188,6 +188,27 @@ class CampaignResponse(CampaignCreate):
     created_at: datetime
 
 
+class CampaignCreatorResponse(BaseModel):
+    creator_user_id: int
+    creator_name: str
+    creator_email: str | None = None
+    bio: str | None = None
+    niche: str | None = None
+    location: str | None = None
+    collaboration_id: int
+    collaboration_status: str
+    budget: Decimal | None = None
+    message: str | None = None
+
+
+class CampaignDetailResponse(CampaignResponse):
+    company_name: str | None = None
+    company_email: str | None = None
+    company_category: str | None = None
+    creator_count: int
+    creators: list[CampaignCreatorResponse] = Field(default_factory=list)
+
+
 class CollaborationCreate(BaseModel):
     creator_user_id: int
     campaign_id: int

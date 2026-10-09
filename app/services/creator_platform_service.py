@@ -368,6 +368,77 @@ class CreatorPlatformService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def campaign_details(
+        self,
+        campaign_id: int,
+        user_id: int,
+        *,
+        as_company: bool,
+    ) -> dict | None:
+        result = await self.db.execute(
+            select(Campaign, Company, User)
+            .outerjoin(Company, Company.user_id == Campaign.company_user_id)
+            .outerjoin(User, User.id == Campaign.company_user_id)
+            .where(Campaign.id == campaign_id)
+        )
+        campaign_row = result.one_or_none()
+        if campaign_row is None:
+            return None
+        campaign, company, company_user = campaign_row
+
+        collaborations_query = (
+            select(CollaborationRequest, CreatorProfile, User)
+            .outerjoin(CreatorProfile, CreatorProfile.user_id == CollaborationRequest.creator_user_id)
+            .outerjoin(User, User.id == CollaborationRequest.creator_user_id)
+            .where(CollaborationRequest.campaign_id == campaign_id)
+            .order_by(CollaborationRequest.created_at.desc())
+        )
+        if as_company:
+            if campaign.company_user_id != user_id:
+                return None
+        else:
+            collaborations_query = collaborations_query.where(
+                CollaborationRequest.creator_user_id == user_id
+            )
+
+        collaboration_result = await self.db.execute(collaborations_query)
+        collaborations = collaboration_result.all()
+        if not as_company and not collaborations:
+            return None
+
+        creators = [
+            {
+                "creator_user_id": request.creator_user_id,
+                "creator_name": profile.display_name if profile else creator_user.login_id,
+                "creator_email": creator_user.email if creator_user else None,
+                "bio": profile.bio if profile else None,
+                "niche": profile.niche if profile else None,
+                "location": profile.location if profile else None,
+                "collaboration_id": request.id,
+                "collaboration_status": request.status,
+                "budget": request.budget,
+                "message": request.message,
+            }
+            for request, profile, creator_user in collaborations
+        ]
+        return {
+            "id": campaign.id,
+            "company_user_id": campaign.company_user_id,
+            "title": campaign.title,
+            "description": campaign.description,
+            "requirements": campaign.requirements,
+            "budget": campaign.budget,
+            "starts_at": campaign.starts_at,
+            "ends_at": campaign.ends_at,
+            "status": campaign.status,
+            "created_at": campaign.created_at,
+            "company_name": company.company_name if company else None,
+            "company_email": company_user.email if company_user else None,
+            "company_category": company.industry if company else None,
+            "creator_count": len(creators),
+            "creators": creators,
+        }
+
     async def create_collaboration(self, company_user_id: int, values: CollaborationCreate) -> CollaborationRequest:
         if await self.company_profile(company_user_id) is None:
             raise ValueError("Create a company profile before inviting creators")

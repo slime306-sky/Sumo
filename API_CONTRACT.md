@@ -549,6 +549,24 @@ Lists campaigns owned by the current company.
 
 **200 response:** array of `CampaignResponse` objects.
 
+### `GET /companies/me/campaigns/{campaign_id}`
+
+Returns the complete campaign owned by the authenticated company, including
+company information, `creator_count`, and each invited creator's profile and
+collaboration status.
+
+### `GET /creators/me/campaigns/{campaign_id}`
+
+Returns the complete campaign when the authenticated creator has a
+collaboration request for it. The response includes the company information,
+campaign information, and that creator's collaboration details.
+
+The detail response includes `company_name`, `company_email`,
+`company_category`, `creator_count`, and `creators`. Each creator entry
+includes `creator_user_id`, `creator_name`, `creator_email`, `bio`, `niche`,
+`location`, `collaboration_id`, `collaboration_status`, `budget`, and
+`message`.
+
 ### `PATCH /companies/me/campaigns/{campaign_id}`
 
 Updates an owned campaign. All request fields are optional.
