@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     cloudinary_api_secret: str | None = None
     cloudinary_upload_folder: str = "sumo/videos"
     max_video_upload_bytes: int = Field(default=524288000, ge=1)
+    max_profile_image_upload_bytes: int = Field(default=10485760, ge=1)
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

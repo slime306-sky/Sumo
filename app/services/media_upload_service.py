@@ -70,6 +70,40 @@ class MediaUploadService:
             "original_filename": Path(file.filename).name,
         }
 
+    async def upload_profile_image(self, file: UploadFile, user_id: int) -> dict:
+        if not file.filename:
+            raise MediaUploadError("A profile image filename is required")
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise MediaUploadError("Only image files are supported for profile pictures")
+
+        file_size = await self._file_size(file)
+        if file_size > self.settings.max_profile_image_upload_bytes:
+            limit_mb = self.settings.max_profile_image_upload_bytes // (1024 * 1024)
+            raise MediaUploadError(f"Profile image exceeds the {limit_mb} MB upload limit")
+
+        public_id = f"sumo/profile-pictures/{user_id}/{uuid4().hex}"
+        try:
+            result = await run_in_threadpool(
+                cloudinary.uploader.upload,
+                file.file,
+                resource_type="image",
+                public_id=public_id,
+                overwrite=False,
+                use_filename=False,
+                unique_filename=False,
+            )
+        except CloudinaryError as exc:
+            raise MediaUploadError("Cloudinary profile image upload failed") from exc
+
+        return {
+            "profile_pic": result["secure_url"],
+            "public_id": result["public_id"],
+            "resource_type": result.get("resource_type", "image"),
+            "format": result.get("format"),
+            "bytes": result.get("bytes", file_size),
+            "original_filename": Path(file.filename).name,
+        }
+
     @staticmethod
     async def _file_size(file: UploadFile) -> int:
         size = await run_in_threadpool(_file_size, file.file)

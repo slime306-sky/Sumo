@@ -18,10 +18,9 @@ class CreatorRegisterRequest(BaseModel):
     content_experience: str | None = Field(default=None, alias="contentExperience", max_length=100)
     content_interests: list[str] = Field(default_factory=list, alias="contentInterests")
     personal_goal: str | None = Field(default=None, alias="personalGoal")
-    profile_pic: str | None = Field(default=None, alias="profilePic")
     purposes: list[str] = Field(default_factory=list)
 
-    model_config = {"populate_by_name": True}
+    model_config = {"extra": "forbid", "populate_by_name": True}
 
 
 class CompanyRegisterRequest(BaseModel):

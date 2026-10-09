@@ -47,12 +47,25 @@ POST /api/v1/auth/register
 POST /api/v1/auth/register/creator
 POST /api/v1/auth/register/company
 POST /api/v1/auth/login
+POST /api/v1/auth/me/profile-picture
 ```
 
 The creator and company routes create the user and registration profile
 together. The legacy route still accepts a unique `login_id`, password, and
 role (`creator` or `brand`). Passwords are stored as PBKDF2 hashes, and access
 tokens are signed and expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`.
+
+Profile pictures are uploaded as files directly to Cloudinary after creator
+registration. Send the creator's bearer token and an image in a multipart
+request; do not send a profile-picture URL or string:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/me/profile-picture \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@./profile.jpg"
+```
+
+The response contains the stored Cloudinary URL.
 
 YouTube sync handles API page tokens. Facebook sync handles Graph API cursors.
 YouTube analytics are available at

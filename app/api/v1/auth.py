@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.social_accounts import current_user_id
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.registration_profile import Company, Creator
 from app.models.user import User
 from app.schemas.auth import AuthResponse, CompanyRegisterRequest, CreatorRegisterRequest, LoginRequest, RegisterRequest
+from app.services.media_upload_service import MediaUploadError, MediaUploadService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -37,7 +42,33 @@ async def _registered_email(email: str, db: AsyncSession) -> User | None:
 
 
 @router.post("/register/creator", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register_creator(values: CreatorRegisterRequest, db: AsyncSession = Depends(get_db)) -> AuthResponse:
+async def register_creator(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    content_type = request.headers.get("content-type", "")
+    profile_file: UploadFile | None = None
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        values = CreatorRegisterRequest(
+            email=form.get("email"),
+            password=form.get("password"),
+            fullName=form.get("fullName"),
+            cityState=form.get("cityState"),
+            country=form.get("country"),
+            creatorCategory=form.get("creatorCategory"),
+            contentExperience=form.get("contentExperience"),
+            contentInterests=_form_list(form, "contentInterests"),
+            personalGoal=form.get("personalGoal", form.get("personaGoal")),
+            purposes=_form_list(form, "purposes"),
+        )
+        uploaded_file = form.get("profilePic")
+        if uploaded_file is not None and not isinstance(uploaded_file, UploadFile):
+            raise HTTPException(status_code=422, detail="profilePic must be an image file")
+        profile_file = uploaded_file
+    else:
+        values = CreatorRegisterRequest.model_validate(await request.json())
+
     if await _registered_email(values.email, db) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered")
     user = User(login_id=values.email, email=values.email, password_hash=hash_password(values.password), role="creator")
@@ -49,10 +80,22 @@ async def register_creator(values: CreatorRegisterRequest, db: AsyncSession = De
         content_experience=values.content_experience,
         content_interests=values.content_interests,
         personal_goal=values.personal_goal,
-        profile_pic=values.profile_pic,
         purposes=values.purposes,
     )
     db.add(user)
+    await db.flush()
+
+    if profile_file is not None:
+        try:
+            user.creator.profile_pic = (
+                await MediaUploadService(get_settings()).upload_profile_image(profile_file, user.id)
+            )["profile_pic"]
+        except MediaUploadError as exc:
+            await db.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        finally:
+            await profile_file.close()
+
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -60,6 +103,41 @@ async def register_creator(values: CreatorRegisterRequest, db: AsyncSession = De
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered") from exc
     await db.refresh(user)
     return _auth_response(user)
+
+
+def _form_list(form, name: str) -> list[str]:
+    values = form.getlist(name)
+    if len(values) == 1 and isinstance(values[0], str):
+        try:
+            parsed = json.loads(values[0])
+        except json.JSONDecodeError:
+            return [values[0]]
+        if isinstance(parsed, list) and all(isinstance(item, str) for item in parsed):
+            return parsed
+    return [value for value in values if isinstance(value, str)]
+
+
+@router.post("/me/profile-picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(current_user_id),
+) -> dict[str, str]:
+    creator = await db.scalar(select(Creator).where(Creator.user_id == user_id))
+    if creator is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator profile not found")
+
+    try:
+        result = await MediaUploadService(get_settings()).upload_profile_image(file, user_id)
+    except MediaUploadError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    finally:
+        await file.close()
+
+    profile_url = result["profile_pic"]
+    creator.profile_pic = profile_url
+    await db.commit()
+    return {"profile_pic": profile_url}
 
 
 @router.post("/register/company", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
