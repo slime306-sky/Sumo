@@ -43,6 +43,7 @@ async def test_publish_video_uploads_to_a_managed_page():
 
     assert published.platform_video_id == "video-456"
     assert published.url == "https://www.facebook.com/video-456"
+    assert client.requests[0][2]["params"]["fields"] == "id,name,access_token"
     method, url, request = client.requests[1]
     assert method == "POST"
     assert url.endswith("/page-123/videos")
@@ -59,5 +60,25 @@ async def test_publish_video_requires_a_managed_page():
     client = RecordingClient([FakeResponse({"data": []})])
     integration = FacebookIntegration(Settings(), client=client)
 
-    with pytest.raises(PlatformAPIError, match="managed Page"):
+    with pytest.raises(PlatformAPIError, match="no managed Page with a Page access token"):
+        await integration.publish_video("user-token", "https://cdn.example.com/video.mp4", "Launch video")
+
+
+@pytest.mark.asyncio
+async def test_publish_video_skips_pages_without_page_tokens():
+    client = RecordingClient(
+        [
+            FakeResponse(
+                {
+                    "data": [
+                        {"id": "page-without-token", "name": "Unavailable Page"},
+                        {"name": "Missing ID", "access_token": "page-token"},
+                    ]
+                }
+            )
+        ]
+    )
+    integration = FacebookIntegration(Settings(), client=client)
+
+    with pytest.raises(PlatformAPIError, match="reconnect Facebook"):
         await integration.publish_video("user-token", "https://cdn.example.com/video.mp4", "Launch video")

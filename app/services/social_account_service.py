@@ -58,6 +58,24 @@ class SocialAccountService:
         await self.db.refresh(account)
         return account
 
+    async def disconnect(self, user_id: int, account_id: int) -> bool:
+        result = await self.db.execute(
+            select(SocialAccount).where(
+                SocialAccount.id == account_id,
+                SocialAccount.user_id == user_id,
+                SocialAccount.is_active.is_(True),
+            )
+        )
+        account = result.scalar_one_or_none()
+        if account is None:
+            return False
+        account.is_active = False
+        account.access_token = ""
+        account.refresh_token = None
+        account.token_expires_at = None
+        await self.db.commit()
+        return True
+
     async def list_accounts(self, user_id: int) -> list[SocialAccount]:
         result = await self.db.execute(select(SocialAccount).where(SocialAccount.user_id == user_id, SocialAccount.is_active.is_(True)).order_by(SocialAccount.created_at.desc()))
         return [account for account in result.scalars().all() if PlatformService(self.settings).is_enabled(account.platform)]

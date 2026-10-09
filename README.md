@@ -34,6 +34,7 @@ Create OAuth applications in Google Cloud (YouTube) and Meta for Developers (Fac
 GET /api/v1/social/{platform}/connect
 GET /api/v1/social/{platform}/callback?code=...&state=...
 GET /api/v1/social/accounts
+DELETE /api/v1/social/accounts/{account_id}
 GET /api/v1/social/accounts/{account_id}/videos
 POST /api/v1/social/accounts/{account_id}/sync
 ```
@@ -54,6 +55,13 @@ The response includes views, likes, comments, shares, watch time, retention,
 subscribers gained/lost, traffic sources, geography, daily/monthly data,
 playback location, and age/gender. Reconnect YouTube accounts after enabling
 analytics so the OAuth consent includes the analytics read-only scope.
+
+Content can use `target_content` on `POST /api/v1/content` or
+`PATCH /api/v1/content/{content_id}` to provide a different `post_type`,
+`media_url`, and caption for each selected social account. Facebook targets can
+be `video`, `image`, or `text`. YouTube targets must be `video` because the
+public YouTube API does not support Community text/image posts. Any target
+without an override uses the top-level `media_url` and caption.
 
 ### Publishing a video to a Facebook Page
 

@@ -68,14 +68,20 @@ class ContentCreate(BaseModel):
     caption: str | None = None
     media_url: str | None = None
     social_account_ids: list[int] = Field(default_factory=list)
+    target_content: list["ContentTargetInput"] = Field(default_factory=list)
     scheduled_at: datetime | None = None
 
     @model_validator(mode="after")
     def require_content(self):
-        if not (self.caption or self.media_url):
+        if not (self.caption or self.media_url or any(target.caption or target.media_url for target in self.target_content)):
             raise ValueError("Provide a caption or media URL")
         if len(self.social_account_ids) != len(set(self.social_account_ids)):
             raise ValueError("Social account IDs must be unique")
+        target_ids = [target.social_account_id for target in self.target_content]
+        if len(target_ids) != len(set(target_ids)):
+            raise ValueError("Target content account IDs must be unique")
+        if not set(target_ids).issubset(self.social_account_ids):
+            raise ValueError("Target content must reference selected social accounts")
         if self.scheduled_at is not None and not self.social_account_ids:
             raise ValueError("Scheduled content requires at least one social account")
         return self
@@ -85,12 +91,31 @@ class ContentUpdate(BaseModel):
     caption: str | None = None
     media_url: str | None = None
     social_account_ids: list[int] | None = None
+    target_content: list["ContentTargetInput"] | None = None
     scheduled_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_target_content(self):
+        if self.target_content is not None:
+            target_ids = [target.social_account_id for target in self.target_content]
+            if len(target_ids) != len(set(target_ids)):
+                raise ValueError("Target content account IDs must be unique")
+        return self
+
+
+class ContentTargetInput(BaseModel):
+    social_account_id: int
+    post_type: Literal["video", "image", "text"] = "video"
+    caption: str | None = None
+    media_url: str | None = None
 
 
 class ContentTargetResponse(BaseModel):
     id: int
     social_account_id: int
+    post_type: Literal["video", "image", "text"] = "video"
+    caption: str | None = None
+    media_url: str | None = None
     platform_post_id: str | None = None
     published_url: str | None = None
     status: str

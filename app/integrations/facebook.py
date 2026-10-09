@@ -27,15 +27,52 @@ class FacebookIntegration(SocialPlatform):
         return VideoPage(items, (data.get("paging", {}).get("cursors") or {}).get("after"))
 
     async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
-        pages = await self._request("GET", f"{self.graph_url}/me/accounts", params={"fields": "id,access_token", "access_token": access_token})
-        page = (pages.get("data") or [None])[0]
-        if not page or not page.get("id") or not page.get("access_token"):
-            raise PlatformAPIError("Facebook publishing requires a managed Page")
+        pages = await self._request(
+            "GET",
+            f"{self.graph_url}/me/accounts",
+            params={"fields": "id,name,access_token", "access_token": access_token},
+        )
+        page = next(
+            (
+                candidate
+                for candidate in pages.get("data", [])
+                if candidate.get("id") and candidate.get("access_token")
+            ),
+            None,
+        )
+        if page is None:
+            raise PlatformAPIError(
+                "Facebook returned no managed Page with a Page access token. "
+                "Verify that this Facebook account manages a Page, the Meta app "
+                "has pages_show_list and pages_manage_posts, and reconnect Facebook."
+            )
         data = await self._request("POST", f"{self.graph_url}/{page['id']}/videos", data={"file_url": media_url, "title": title, "description": description or ""}, headers={"Authorization": f"Bearer {page['access_token']}"})
         video_id = data.get("id")
         if not video_id:
             raise PlatformAPIError("Facebook upload response did not include a video ID")
         return NormalizedVideo(video_id, title, description, f"https://www.facebook.com/{video_id}", raw_data=data)
+
+    async def publish_text(self, access_token: str, message: str) -> NormalizedVideo:
+        pages = await self._request("GET", f"{self.graph_url}/me/accounts", params={"fields": "id,name,access_token", "access_token": access_token})
+        page = next((candidate for candidate in pages.get("data", []) if candidate.get("id") and candidate.get("access_token")), None)
+        if page is None:
+            raise PlatformAPIError("Facebook returned no managed Page with a Page access token")
+        data = await self._request("POST", f"{self.graph_url}/{page['id']}/feed", data={"message": message}, headers={"Authorization": page["access_token"]})
+        post_id = data.get("id")
+        if not post_id:
+            raise PlatformAPIError("Facebook text post response did not include a post ID")
+        return NormalizedVideo(post_id, message, None, f"https://www.facebook.com/{post_id}", raw_data=data)
+
+    async def publish_image(self, access_token: str, media_url: str, caption: str | None = None) -> NormalizedVideo:
+        pages = await self._request("GET", f"{self.graph_url}/me/accounts", params={"fields": "id,name,access_token", "access_token": access_token})
+        page = next((candidate for candidate in pages.get("data", []) if candidate.get("id") and candidate.get("access_token")), None)
+        if page is None:
+            raise PlatformAPIError("Facebook returned no managed Page with a Page access token")
+        data = await self._request("POST", f"{self.graph_url}/{page['id']}/photos", data={"url": media_url, "caption": caption or ""}, headers={"Authorization": page["access_token"]})
+        post_id = data.get("post_id") or data.get("id")
+        if not post_id:
+            raise PlatformAPIError("Facebook image post response did not include a post ID")
+        return NormalizedVideo(post_id, caption, caption, f"https://www.facebook.com/{post_id}", raw_data=data)
 
 
 def _summary(value: dict | None) -> int | None:

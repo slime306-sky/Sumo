@@ -45,6 +45,13 @@ async def accounts(db: AsyncSession = Depends(get_db), user_id: int = Depends(cu
     return await SocialAccountService(db, get_settings()).list_accounts(user_id)
 
 
+@router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect_account(account_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> None:
+    disconnected = await SocialAccountService(db, get_settings()).disconnect(user_id, account_id)
+    if not disconnected:
+        raise HTTPException(status_code=404, detail="Social account not found")
+
+
 @router.patch("/accounts/{account_id}/influencer", response_model=SocialAccountResponse)
 async def update_account_influencer(account_id: int, update: InfluencerUpdate, db: AsyncSession = Depends(get_db), user_id: int = Depends(current_user_id)) -> SocialAccountResponse:
     account = await SocialAccountService(db, get_settings()).set_influencer(user_id, account_id, update.is_influencer)

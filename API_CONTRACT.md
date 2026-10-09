@@ -113,7 +113,7 @@ verification.
   value.
 
 The integration requests `GET /me/accounts` using the connected user token,
-selects the first returned Page with an ID and Page access token, then sends
+selects the first returned Page with both an ID and Page access token, then sends
 the video to `POST /{page_id}/videos` with `file_url`, `title`, and
 `description`. The Page access token is never returned in an API response or
 written to logs.
@@ -233,6 +233,19 @@ Lists the current user's active accounts on enabled platforms.
 **Headers:** `Authorization: Bearer <access_token>`.
 
 **200 response:** array of `SocialAccountResponse` objects, as above.
+
+### `DELETE /social/accounts/{account_id}`
+
+Disconnects an active social account owned by the current user. The account is
+soft-deactivated so historical videos remain available, and its stored OAuth
+tokens are cleared. The account can be connected again through the platform
+OAuth flow.
+
+**Headers:** `Authorization: ******`
+
+**204 response:** no body.
+
+**Errors:** `404` account not found for this user.
 
 ### `PATCH /social/accounts/{account_id}/influencer`
 
@@ -619,11 +632,32 @@ Creates a content draft or a scheduled item. At least one of `caption` or `media
   "caption": "A new video is coming soon",
   "media_url": "https://cdn.example/video.mp4",
   "social_account_ids": [31, 32],
+  "target_content": [
+    {
+      "social_account_id": 31,
+      "caption": "YouTube title and description",
+      "media_url": "https://cdn.example/youtube-video.mp4"
+    },
+    {
+      "social_account_id": 32,
+      "caption": "Facebook Page caption",
+      "media_url": "https://cdn.example/facebook-video.mp4"
+    }
+  ],
   "scheduled_at": "2026-11-05T16:00:00Z"
 }
 ```
 
 All properties are optional except that at least one of `caption` or `media_url` must be supplied. `social_account_ids` defaults to `[]`. `scheduled_at` requires a timezone, a future time, and at least one target account.
+
+`target_content` optionally sets a `post_type` (`video`, `image`, or `text`) and
+overrides the caption and/or media URL for an individual selected social
+account. Targets not listed there use the top-level values and default to
+`video`. This allows different content to be published to YouTube and Facebook
+from one content item. Each `target_content.social_account_id` must also
+appear in `social_account_ids`. Facebook supports all three types; YouTube
+supports only `video` because the public YouTube Data API does not provide an
+endpoint for Community text or image posts.
 
 **201 response: `ContentResponse`**
 
@@ -691,7 +725,7 @@ Returns one content item owned by the current user.
 
 ### `PATCH /content/{content_id}`
 
-Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `social_account_ids`, `scheduled_at`. Fields are optional. At least one of caption/media URL must remain set. `scheduled_at: null` clears the schedule; a non-null value must be a future timezone-aware datetime with at least one target account. Replacing targets requires all account IDs to belong to the current user.
+Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `social_account_ids`, `target_content`, and `scheduled_at`. Fields are optional. At least one of caption/media URL must remain set. `target_content` updates per-account post type and caption/media overrides. `scheduled_at: null` clears the schedule; a non-null value must be a future timezone-aware datetime with at least one target account. Replacing targets requires all account IDs to belong to the current user.
 
 **Headers:** `Authorization: Bearer <access_token>`.
 
@@ -701,6 +735,12 @@ Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `s
 {
   "caption": "Updated caption",
   "social_account_ids": [31],
+  "target_content": [
+    {
+      "social_account_id": 31,
+      "media_url": "https://cdn.example/youtube-video-v2.mp4"
+    }
+  ],
   "scheduled_at": null
 }
 ```
@@ -711,8 +751,10 @@ Updates an owned, unpublished item. Supported fields: `caption`, `media_url`, `s
 
 ### `POST /content/{content_id}/publish`
 
-No request body. Publishes the content media URL to every selected, active
-social account owned by the authenticated user. Facebook publishing discovers
+No request body. Publishes each target's media URL and caption to every
+selected, active social account owned by the authenticated user. A target
+override is used when present; otherwise the content-level media URL and
+caption are used. Facebook publishing discovers
 the first managed Page available to the connected Facebook account and uploads
 the public media URL as a Page video.
 
@@ -742,9 +784,11 @@ targets are marked `failed`, the content is marked `failed`, and the endpoint
 returns `502`.
 
 **Errors:** `400` content cannot be published or has no targets; `404` content
-not found/owned; `502` provider publishing failure. Facebook-specific
-failures include no managed Page, missing `pages_manage_posts` permission, an
-expired or invalid token, or a media URL that Facebook cannot fetch.
+not found/owned; `502` provider publishing failure. Facebook-specific failures include no managed Page with a Page access token,
+missing `pages_manage_posts` permission, an expired or invalid token, or a
+media URL that Facebook cannot fetch. After changing Meta permissions or Page
+access, disconnect/reconnect Facebook so the application stores a newly
+authorized token.
 
 ## Analytics
 

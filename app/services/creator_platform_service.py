@@ -135,8 +135,18 @@ class CreatorPlatformService:
         item = ContentItem(creator_user_id=user_id, caption=values.caption, media_url=values.media_url, scheduled_at=values.scheduled_at, status="scheduled" if values.scheduled_at else "draft")
         self.db.add(item)
         await self.db.flush()
+        target_content = {target.social_account_id: target for target in values.target_content}
         for account_id in values.social_account_ids:
-            self.db.add(ContentTarget(content_item_id=item.id, social_account_id=account_id))
+            override = target_content.get(account_id)
+            self.db.add(
+                ContentTarget(
+                    content_item_id=item.id,
+                    social_account_id=account_id,
+                    post_type=override.post_type if override else "video",
+                    caption=override.caption if override else None,
+                    media_url=override.media_url if override else None,
+                )
+            )
         await self.db.commit()
         await self.db.refresh(item)
         return await self._content_response(item)
@@ -153,6 +163,7 @@ class CreatorPlatformService:
             raise ValueError("Published content cannot be edited")
         data = values.model_dump(exclude_unset=True)
         account_ids = data.pop("social_account_ids", None)
+        target_content = data.pop("target_content", None)
         scheduled_at = data.get("scheduled_at", item.scheduled_at)
         if account_ids is None:
             result = await self.db.execute(select(ContentTarget.social_account_id).where(ContentTarget.content_item_id == item.id))
@@ -166,8 +177,30 @@ class CreatorPlatformService:
         if "social_account_ids" in values.model_fields_set:
             await self._owned_targets(user_id, account_ids)
             await self.db.execute(delete(ContentTarget).where(ContentTarget.content_item_id == item.id))
+            target_content_by_account = {
+                target["social_account_id"]: target for target in target_content or []
+            }
             for account_id in account_ids:
-                self.db.add(ContentTarget(content_item_id=item.id, social_account_id=account_id))
+                override = target_content_by_account.get(account_id, {})
+                self.db.add(
+                    ContentTarget(
+                        content_item_id=item.id,
+                        social_account_id=account_id,
+                        post_type=override.get("post_type", "video"),
+                        caption=override.get("caption"),
+                        media_url=override.get("media_url"),
+                    )
+                )
+        elif target_content is not None:
+            result = await self.db.execute(select(ContentTarget).where(ContentTarget.content_item_id == item.id))
+            targets_by_account = {target.social_account_id: target for target in result.scalars().all()}
+            for override in target_content:
+                target = targets_by_account.get(override["social_account_id"])
+                if target is None:
+                    raise ValueError("Target content must reference selected social accounts")
+                target.caption = override.get("caption")
+                target.media_url = override.get("media_url")
+                target.post_type = override.get("post_type", "video")
         for key, value in data.items():
             setattr(item, key, value)
         item.status = "scheduled" if item.scheduled_at else "draft"
@@ -179,8 +212,6 @@ class CreatorPlatformService:
         item = await self.get_content(user_id, content_id)
         if item is None:
             raise LookupError("Content not found")
-        if not item.media_url:
-            raise ValueError("Content must have a media URL before publishing")
         if item.status == "published":
             raise ValueError("Published content cannot be published again")
         result = await self.db.execute(
@@ -192,17 +223,34 @@ class CreatorPlatformService:
         targets = list(result.all())
         if not targets:
             raise ValueError("Content must target at least one social account")
+        for target, account in targets:
+            caption = target.caption if target.caption is not None else item.caption
+            media_url = target.media_url or item.media_url
+            if target.post_type == "text" and not caption:
+                raise ValueError(f"{account.platform.value} text targets must have a caption")
+            if target.post_type in {"video", "image"} and not media_url:
+                raise ValueError(f"{account.platform.value} {target.post_type} targets must have a media URL")
+            if account.platform.value == "youtube" and target.post_type != "video":
+                raise ValueError("YouTube only supports video publishing through its public API")
 
         item.status = "publishing"
         await self.db.commit()
         failures: list[str] = []
-        title = (item.caption or "Untitled video")[:100]
         for target, account in targets:
             target.status = "publishing"
             await self.db.commit()
             try:
                 token = await self._valid_token(account)
-                published = await get_integration(account.platform, self.settings).publish_video(token, item.media_url, title, item.caption)
+                media_url = target.media_url or item.media_url
+                caption = target.caption if target.caption is not None else item.caption
+                integration = get_integration(account.platform, self.settings)
+                if target.post_type == "text":
+                    published = await integration.publish_text(token, caption or "")
+                elif target.post_type == "image":
+                    published = await integration.publish_image(token, media_url or "", caption)
+                else:
+                    title = (caption or "Untitled video")[:100]
+                    published = await integration.publish_video(token, media_url or "", title, caption)
             except SocialIntegrationError as exc:
                 target.status = "failed"
                 failures.append(f"{account.platform.value}: {exc}")

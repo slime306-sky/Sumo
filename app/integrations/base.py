@@ -99,6 +99,12 @@ class SocialPlatform(ABC):
     async def publish_video(self, access_token: str, media_url: str, title: str, description: str | None = None) -> NormalizedVideo:
         raise UnsupportedPlatformError(f"{self.platform.value} does not support video publishing")
 
+    async def publish_text(self, access_token: str, message: str) -> NormalizedVideo:
+        raise UnsupportedPlatformError(f"{self.platform.value} does not support text publishing")
+
+    async def publish_image(self, access_token: str, media_url: str, caption: str | None = None) -> NormalizedVideo:
+        raise UnsupportedPlatformError(f"{self.platform.value} does not support image publishing")
+
     async def close(self) -> None:
         await self.client.aclose()
 
